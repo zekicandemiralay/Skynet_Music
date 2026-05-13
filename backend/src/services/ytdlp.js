@@ -1,0 +1,88 @@
+const { spawn } = require('child_process');
+
+function searchYoutube(query, limit = 20) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('yt-dlp', [
+      `ytsearch${limit}:${query}`,
+      '--dump-json',
+      '--flat-playlist',
+      '--no-warnings',
+    ]);
+
+    const results = [];
+    let buffer = '';
+    let errorOut = '';
+
+    proc.stdout.on('data', (chunk) => {
+      buffer += chunk.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const d = JSON.parse(line);
+          results.push({
+            id: d.id,
+            title: d.title,
+            thumbnail: d.thumbnail || `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`,
+            duration: d.duration || null,
+            channel: d.channel || d.uploader || null,
+            viewCount: d.view_count || null,
+          });
+        } catch {}
+      }
+    });
+
+    proc.stderr.on('data', (c) => { errorOut += c.toString(); });
+
+    proc.on('close', (code) => {
+      if (code !== 0 && results.length === 0) {
+        reject(new Error(`yt-dlp search failed: ${errorOut.slice(0, 300)}`));
+      } else {
+        resolve(results);
+      }
+    });
+
+    proc.on('error', reject);
+  });
+}
+
+function downloadAudio(videoId, outputDir, onProgress) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('yt-dlp', [
+      `https://www.youtube.com/watch?v=${videoId}`,
+      '-x',
+      '--audio-format', 'mp3',
+      '--audio-quality', '0',
+      '--newline',
+      '-o', `${outputDir}/%(uploader)s - %(title)s.%(ext)s`,
+      '--no-playlist',
+    ]);
+
+    let lastFile = '';
+    let errorOut = '';
+
+    proc.stdout.on('data', (chunk) => {
+      for (const line of chunk.toString().split('\n')) {
+        const pct = line.match(/\[download\]\s+([\d.]+)%/);
+        if (pct) onProgress(parseFloat(pct[1]));
+
+        const dest = line.match(/\[(?:ExtractAudio|download)\] Destination: (.+)/);
+        if (dest) lastFile = dest[1].trim();
+
+        if (line.includes('has already been downloaded')) onProgress(100);
+      }
+    });
+
+    proc.stderr.on('data', (c) => { errorOut += c.toString(); });
+
+    proc.on('close', (code) => {
+      if (code !== 0) reject(new Error(`Download failed: ${errorOut.slice(0, 300)}`));
+      else resolve(lastFile);
+    });
+
+    proc.on('error', reject);
+  });
+}
+
+module.exports = { searchYoutube, downloadAudio };
