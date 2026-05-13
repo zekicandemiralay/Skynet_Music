@@ -1,28 +1,16 @@
 import { create } from 'zustand';
-import { encrypt, decrypt } from '../lib/crypto';
-import useAuthStore from './authStore';
 
-// All data is encrypted on the client before being saved.
-// The server stores opaque blobs — it cannot read liked songs or playlists.
-
-async function saveKey(key, data, cryptoKey) {
-  const { encrypted_blob, iv } = await encrypt(cryptoKey, data);
+async function save(key, data) {
   await fetch(`/api/me/data/${key}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ encrypted_blob, iv }),
+    body: JSON.stringify({ data }),
   });
 }
 
-async function loadKey(key, cryptoKey) {
+async function load(key) {
   const res = await fetch(`/api/me/data/${key}`);
-  const row = await res.json();
-  if (!row) return null;
-  try {
-    return await decrypt(cryptoKey, row.encrypted_blob, row.iv);
-  } catch {
-    return null; // corrupted or wrong key
-  }
+  return res.ok ? res.json() : null;
 }
 
 const useUserDataStore = create((set, get) => ({
@@ -31,12 +19,10 @@ const useUserDataStore = create((set, get) => ({
   loaded: false,
 
   load: async () => {
-    const { cryptoKey } = useAuthStore.getState();
-    if (!cryptoKey) return;
     try {
       const [liked, playlists] = await Promise.all([
-        loadKey('liked_songs', cryptoKey),
-        loadKey('playlists', cryptoKey),
+        load('liked_songs'),
+        load('playlists'),
       ]);
       set({ likedSongs: liked || [], playlists: playlists || [], loaded: true });
     } catch {
@@ -49,12 +35,10 @@ const useUserDataStore = create((set, get) => ({
   // ── Liked songs ──────────────────────────────────────────────────────────
 
   toggleLike: async (songId) => {
-    const { cryptoKey } = useAuthStore.getState();
-    if (!cryptoKey) return;
     const prev = get().likedSongs;
     const next = prev.includes(songId) ? prev.filter((id) => id !== songId) : [...prev, songId];
     set({ likedSongs: next });
-    await saveKey('liked_songs', next, cryptoKey);
+    await save('liked_songs', next);
   },
 
   isLiked: (songId) => get().likedSongs.includes(songId),
@@ -62,51 +46,41 @@ const useUserDataStore = create((set, get) => ({
   // ── Playlists ─────────────────────────────────────────────────────────────
 
   createPlaylist: async (name) => {
-    const { cryptoKey } = useAuthStore.getState();
-    if (!cryptoKey) return null;
     const playlist = { id: crypto.randomUUID(), name, songs: [] };
     const next = [...get().playlists, playlist];
     set({ playlists: next });
-    await saveKey('playlists', next, cryptoKey);
+    await save('playlists', next);
     return playlist;
   },
 
   renamePlaylist: async (playlistId, name) => {
-    const { cryptoKey } = useAuthStore.getState();
-    if (!cryptoKey) return;
     const next = get().playlists.map((p) => (p.id === playlistId ? { ...p, name } : p));
     set({ playlists: next });
-    await saveKey('playlists', next, cryptoKey);
+    await save('playlists', next);
   },
 
   deletePlaylist: async (playlistId) => {
-    const { cryptoKey } = useAuthStore.getState();
-    if (!cryptoKey) return;
     const next = get().playlists.filter((p) => p.id !== playlistId);
     set({ playlists: next });
-    await saveKey('playlists', next, cryptoKey);
+    await save('playlists', next);
   },
 
   addToPlaylist: async (playlistId, songId) => {
-    const { cryptoKey } = useAuthStore.getState();
-    if (!cryptoKey) return;
     const next = get().playlists.map((p) =>
       p.id === playlistId && !p.songs.includes(songId)
         ? { ...p, songs: [...p.songs, songId] }
         : p
     );
     set({ playlists: next });
-    await saveKey('playlists', next, cryptoKey);
+    await save('playlists', next);
   },
 
   removeFromPlaylist: async (playlistId, songId) => {
-    const { cryptoKey } = useAuthStore.getState();
-    if (!cryptoKey) return;
     const next = get().playlists.map((p) =>
       p.id === playlistId ? { ...p, songs: p.songs.filter((id) => id !== songId) } : p
     );
     set({ playlists: next });
-    await saveKey('playlists', next, cryptoKey);
+    await save('playlists', next);
   },
 }));
 

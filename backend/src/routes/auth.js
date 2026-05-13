@@ -10,7 +10,6 @@ const COOKIE_OPTS = {
   httpOnly: true,
   sameSite: 'lax',
   maxAge: 7 * 24 * 60 * 60 * 1000,
-  // set secure=true only when explicitly configured (HTTPS in production)
   secure: process.env.SECURE_COOKIE === 'true',
 };
 
@@ -30,8 +29,7 @@ router.post('/login', async (req, res) => {
   );
 
   res.cookie('token', token, COOKIE_OPTS);
-  // Return salt so the client can derive the crypto key from the password
-  res.json({ id: user.id, username: user.username, role: user.role, salt: user.salt });
+  res.json({ id: user.id, username: user.username, role: user.role });
 });
 
 router.post('/logout', (_req, res) => {
@@ -41,34 +39,25 @@ router.post('/logout', (_req, res) => {
 
 router.get('/me', requireAuth, (req, res) => {
   const user = getDb()
-    .prepare('SELECT id, username, role, salt FROM users WHERE id = ?')
+    .prepare('SELECT id, username, role FROM users WHERE id = ?')
     .get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json(user);
 });
 
-// Change own password
 router.post('/change-password', requireAuth, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Both passwords required' });
   if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
 
-  const db = getDb();
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  const user = getDb().prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!(await bcrypt.compare(currentPassword, user.password_hash))) {
     return res.status(401).json({ error: 'Current password is wrong' });
   }
 
-  // New password means a new salt and a new crypto key on the client.
-  // All existing encrypted user_data will be unreadable — clear it.
-  const crypto = require('crypto');
-  const newSalt = crypto.randomBytes(32).toString('hex');
   const newHash = await bcrypt.hash(newPassword, 12);
-
-  db.prepare('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?').run(newHash, newSalt, req.user.id);
-  db.prepare('DELETE FROM user_data WHERE user_id = ?').run(req.user.id);
-
-  res.json({ ok: true, note: 'Liked songs and playlists were cleared because the encryption key changed.' });
+  getDb().prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, req.user.id);
+  res.json({ ok: true });
 });
 
 module.exports = router;

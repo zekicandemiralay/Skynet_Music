@@ -47,12 +47,14 @@ function PlaylistItem({ playlist }) {
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({ onNavigate }) {
   const { user, logout } = useAuthStore();
   const { playlists, likedSongs, createPlaylist } = useUserDataStore();
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const navigate = useNavigate();
+
+  const nav = (to) => { navigate(to); onNavigate?.(); };
 
   const linkClass = ({ isActive }) =>
     `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -65,7 +67,7 @@ export default function Sidebar() {
     const playlist = await createPlaylist(name);
     setNewName('');
     setCreating(false);
-    if (playlist) navigate(`/playlist/${playlist.id}`);
+    if (playlist) nav(`/playlist/${playlist.id}`);
   }
 
   async function handleLogout() {
@@ -74,7 +76,7 @@ export default function Sidebar() {
   }
 
   return (
-    <div className="w-60 bg-black flex flex-col gap-2 p-2 shrink-0 overflow-y-auto">
+    <div className="w-64 h-full bg-black flex flex-col gap-2 p-2 shrink-0 overflow-y-auto">
       {/* App header + nav */}
       <div className="bg-zinc-900 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-5">
@@ -82,23 +84,23 @@ export default function Sidebar() {
           <span className="text-white font-bold text-base">Skynet Music</span>
         </div>
         <nav className="space-y-0.5">
-          <NavLink to="/" end className={linkClass}>
+          <NavLink to="/" end className={linkClass} onClick={onNavigate}>
             <Library size={18} />
             Library
           </NavLink>
-          <NavLink to="/liked" className={linkClass}>
+          <NavLink to="/liked" className={linkClass} onClick={onNavigate}>
             <Heart size={18} className="text-red-400" />
             Liked Songs
             {likedSongs.length > 0 && (
               <span className="ml-auto text-xs text-zinc-500">{likedSongs.length}</span>
             )}
           </NavLink>
-          <NavLink to="/youtube" className={linkClass}>
+          <NavLink to="/youtube" className={linkClass} onClick={onNavigate}>
             <Youtube size={18} className="text-red-500" />
             YouTube
           </NavLink>
           {user?.role === 'admin' && (
-            <NavLink to="/admin" className={linkClass}>
+            <NavLink to="/admin" className={linkClass} onClick={onNavigate}>
               <ShieldCheck size={18} className="text-amber-400" />
               Admin
             </NavLink>

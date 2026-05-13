@@ -47,10 +47,10 @@ function ResetPasswordDialog({ user, onClose }) {
           <button onClick={onClose} className="text-zinc-500 hover:text-white"><X size={18} /></button>
         </div>
         {done ? (
-          <p className="text-green-400 text-sm">Password reset. Their liked songs and playlists were cleared (new encryption key).</p>
+          <p className="text-green-400 text-sm">Password reset successfully. Their playlists and liked songs are kept.</p>
         ) : (
           <>
-            <p className="text-zinc-400 text-xs">This will also clear their encrypted personal data since the encryption key changes.</p>
+            <p className="text-zinc-400 text-xs">Their playlists and liked songs will be kept after the reset.</p>
             <input
               type="password"
               placeholder="New password (min 8 chars)"
@@ -192,9 +192,8 @@ export default function Admin() {
 
       <div className="mt-6 p-4 bg-zinc-800/40 rounded-xl">
         <p className="text-zinc-500 text-xs leading-relaxed">
-          <span className="text-zinc-300 font-medium">Encryption note:</span> Each user's liked songs and playlists are encrypted
-          with a key derived from their password. Even as admin, you cannot read this data.
-          Resetting a user's password clears their personal data because the encryption key changes.
+          <span className="text-zinc-300 font-medium">Privacy note:</span> Each user's liked songs and playlists
+          are only accessible through their own account. Resetting a password keeps their data intact.
         </p>
       </div>
 

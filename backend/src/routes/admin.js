@@ -6,7 +6,6 @@ const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 
-// All routes in this file require admin
 router.use(requireAdmin);
 
 router.get('/users', (_req, res) => {
@@ -43,21 +42,14 @@ router.delete('/users/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// Reset a user's password (clears their encrypted data — new key, fresh start)
+// Reset password — data is preserved since there is no encryption key tied to the password
 router.post('/users/:id/reset-password', async (req, res) => {
   const { newPassword } = req.body;
   if (!newPassword || newPassword.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
   }
-
-  const db = getDb();
-  const crypto = require('crypto');
-  const newSalt = crypto.randomBytes(32).toString('hex');
   const newHash = await bcrypt.hash(newPassword, 12);
-
-  db.prepare('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?').run(newHash, newSalt, req.params.id);
-  db.prepare('DELETE FROM user_data WHERE user_id = ?').run(req.params.id);
-
+  getDb().prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, req.params.id);
   res.json({ ok: true });
 });
 

@@ -5,27 +5,23 @@ const { requireAuth } = require('../middleware/auth');
 
 router.use(requireAuth);
 
-// GET /api/me/data/:key — fetch one encrypted blob
 router.get('/:key', (req, res) => {
   const row = getDb()
-    .prepare('SELECT encrypted_blob, iv FROM user_data WHERE user_id = ? AND data_key = ?')
+    .prepare('SELECT data_json FROM user_data WHERE user_id = ? AND data_key = ?')
     .get(req.user.id, req.params.key);
-  res.json(row || null);
+  res.json(row ? JSON.parse(row.data_json) : null);
 });
 
-// PUT /api/me/data/:key — save one encrypted blob
 router.put('/:key', (req, res) => {
-  const { encrypted_blob, iv } = req.body;
-  if (!encrypted_blob || !iv) return res.status(400).json({ error: 'encrypted_blob and iv required' });
+  const { data } = req.body;
+  if (data === undefined) return res.status(400).json({ error: 'data required' });
 
   getDb().prepare(`
-    INSERT INTO user_data (user_id, data_key, encrypted_blob, iv, updated_at)
-    VALUES (?, ?, ?, ?, datetime('now'))
+    INSERT INTO user_data (user_id, data_key, data_json, updated_at)
+    VALUES (?, ?, ?, datetime('now'))
     ON CONFLICT(user_id, data_key)
-    DO UPDATE SET encrypted_blob = excluded.encrypted_blob,
-                  iv = excluded.iv,
-                  updated_at = excluded.updated_at
-  `).run(req.user.id, req.params.key, encrypted_blob, iv);
+    DO UPDATE SET data_json = excluded.data_json, updated_at = excluded.updated_at
+  `).run(req.user.id, req.params.key, JSON.stringify(data));
 
   res.json({ ok: true });
 });

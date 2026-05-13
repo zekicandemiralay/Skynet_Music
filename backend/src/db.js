@@ -21,6 +21,7 @@ function getDb() {
 
 function initDb() {
   const database = getDb();
+
   database.exec(`
     CREATE TABLE IF NOT EXISTS songs (
       id TEXT PRIMARY KEY,
@@ -55,12 +56,19 @@ function initDb() {
       role TEXT DEFAULT 'user',
       created_at TEXT DEFAULT (datetime('now'))
     );
+  `);
 
+  // Migrate user_data if it was created with the old encrypted schema
+  const cols = database.pragma('table_info(user_data)').map((c) => c.name);
+  if (cols.includes('encrypted_blob')) {
+    database.exec('DROP TABLE user_data');
+  }
+
+  database.exec(`
     CREATE TABLE IF NOT EXISTS user_data (
       user_id TEXT NOT NULL,
       data_key TEXT NOT NULL,
-      encrypted_blob TEXT NOT NULL,
-      iv TEXT NOT NULL,
+      data_json TEXT NOT NULL,
       updated_at TEXT DEFAULT (datetime('now')),
       PRIMARY KEY (user_id, data_key),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -70,7 +78,7 @@ function initDb() {
   ensureAdmin(database);
 }
 
-async function ensureAdmin(database) {
+function ensureAdmin(database) {
   const existing = database.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin'").get();
   if (existing.c > 0) return;
 
@@ -79,16 +87,16 @@ async function ensureAdmin(database) {
 
   if (!password) {
     password = crypto.randomBytes(12).toString('hex');
-    console.log('\n╔══════════════════════════════════════╗');
-    console.log('║   Admin account created automatically  ║');
-    console.log(`║   Username : ${username.padEnd(24)}║`);
-    console.log(`║   Password : ${password.padEnd(24)}║`);
-    console.log('║   Save this — it will not show again   ║');
-    console.log('╚══════════════════════════════════════╝\n');
+    console.log('\n╔══════════════════════════════════════════╗');
+    console.log('║    Admin account created automatically    ║');
+    console.log(`║    Username : ${username.padEnd(26)}║`);
+    console.log(`║    Password : ${password.padEnd(26)}║`);
+    console.log('║    Save this — it will not show again     ║');
+    console.log('╚══════════════════════════════════════════╝\n');
   }
 
   const salt = crypto.randomBytes(32).toString('hex');
-  const hash = await bcrypt.hash(password, 12);
+  const hash = bcrypt.hashSync(password, 12);
 
   database.prepare(
     'INSERT INTO users (id, username, password_hash, salt, role) VALUES (?, ?, ?, ?, ?)'

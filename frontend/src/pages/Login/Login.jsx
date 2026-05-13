@@ -79,7 +79,7 @@ export default function Login() {
         </form>
 
         <p className="text-center text-zinc-600 text-xs mt-6">
-          Your personal data is end-to-end encrypted.
+          Your playlists and liked songs are private to your account.
         </p>
       </div>
     </div>

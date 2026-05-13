@@ -105,22 +105,32 @@ function VideoCard({ video, onSelect }) {
 function Modal({ video, onClose }) {
   if (!video) return null;
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    // Full-screen on mobile, centred card on desktop
+    <div className="fixed inset-0 z-50 flex flex-col md:items-center md:justify-center md:p-4 md:bg-black/80" onClick={onClose}>
       <div
-        className="bg-zinc-900 rounded-2xl overflow-hidden w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+        className="bg-zinc-900 flex flex-col w-full h-full md:h-auto md:rounded-2xl md:overflow-hidden md:max-w-4xl md:max-h-[90vh] md:overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="aspect-video bg-black">
+        {/* Close bar — visible on mobile at top */}
+        <div className="flex items-center justify-between px-4 py-3 md:hidden border-b border-zinc-800 shrink-0">
+          <p className="text-white text-sm font-medium truncate pr-4">{video.title}</p>
+          <button onClick={onClose} className="text-zinc-400 hover:text-white shrink-0">
+            <X size={22} />
+          </button>
+        </div>
+
+        <div className="aspect-video bg-black w-full shrink-0">
           <iframe
             src={`https://www.youtube.com/embed/${video.id}?autoplay=1`}
             title={video.title}
             className="w-full h-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
             allowFullScreen
           />
         </div>
-        <div className="p-6">
-          <div className="flex items-start justify-between gap-4 mb-4">
+
+        <div className="p-4 md:p-6 overflow-y-auto flex-1">
+          <div className="hidden md:flex items-start justify-between gap-4 mb-4">
             <div className="flex-1">
               <h2 className="text-white text-xl font-bold mb-1">{video.title}</h2>
               <p className="text-zinc-400 text-sm">{video.channel}</p>
@@ -130,7 +140,12 @@ function Modal({ video, onClose }) {
               <X size={22} />
             </button>
           </div>
-          <div className="flex items-center gap-4 pt-4 border-t border-zinc-800">
+          {/* Mobile: show channel below video */}
+          <div className="md:hidden mb-3">
+            <p className="text-zinc-400 text-sm">{video.channel}</p>
+            {video.viewCount && <p className="text-zinc-600 text-xs">{fmtViews(video.viewCount)}</p>}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-zinc-800">
             <DownloadBtn videoId={video.id} title={video.title} />
             <a
               href={`https://www.youtube.com/watch?v=${video.id}`}
@@ -232,7 +247,7 @@ export default function YouTube() {
         )}
 
         {!loading && !error && results.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
             {results.map((v) => <VideoCard key={v.id} video={v} onSelect={setSelected} />)}
           </div>
         )}

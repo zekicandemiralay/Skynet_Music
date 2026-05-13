@@ -122,12 +122,12 @@ export default function Library({ view = 'all' }) {
     `${songs.length} songs`;
 
   return (
-    <div className="p-6">
-      <div className="flex items-start justify-between mb-6">
+    <div className="p-4 md:p-6">
+      <div className="flex items-start justify-between mb-5 md:mb-6">
         <div className="flex items-center gap-3">
-          {view === 'liked' && <Heart size={36} className="text-red-400 fill-current" />}
+          {view === 'liked' && <Heart size={32} className="text-red-400 fill-current md:text-4xl" />}
           <div>
-            <h1 className="text-3xl font-bold text-white">{heading}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-white">{heading}</h1>
             <p className="text-zinc-400 text-sm mt-1">{subheading}</p>
           </div>
         </div>
@@ -135,15 +135,15 @@ export default function Library({ view = 'all' }) {
           <button
             onClick={scan}
             disabled={scanning}
-            className="flex items-center gap-2 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-full text-sm font-medium transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-full text-sm font-medium transition-colors disabled:opacity-50 shrink-0"
           >
             <RefreshCw size={15} className={scanning ? 'animate-spin' : ''} />
-            {scanning ? 'Scanning…' : 'Scan Library'}
+            <span className="hidden sm:inline">{scanning ? 'Scanning…' : 'Scan Library'}</span>
           </button>
         )}
       </div>
 
-      <div className="relative mb-6">
+      <div className="relative mb-5 md:mb-6">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
         <input
           type="text"
@@ -176,7 +176,8 @@ export default function Library({ view = 'all' }) {
         </div>
       ) : (
         <div>
-          <div className="grid grid-cols-[2rem_1fr_1fr_1fr_4rem_5rem] gap-3 px-4 py-2 text-zinc-500 text-xs uppercase tracking-wider border-b border-zinc-800 mb-1">
+          {/* Desktop-only header row */}
+          <div className="hidden md:grid md:grid-cols-[2rem_1fr_1fr_1fr_4rem_5rem] gap-3 px-4 py-2 text-zinc-500 text-xs uppercase tracking-wider border-b border-zinc-800 mb-1">
             <span>#</span>
             <span>Title</span>
             <span>Artist</span>
@@ -192,58 +193,66 @@ export default function Library({ view = 'all' }) {
             return (
               <div
                 key={song.id}
-                className={`grid grid-cols-[2rem_1fr_1fr_1fr_4rem_5rem] gap-3 px-4 py-2 rounded-md cursor-pointer transition-colors items-center group ${
+                className={`grid grid-cols-[1fr_3rem_3.5rem] md:grid-cols-[2rem_1fr_1fr_1fr_4rem_5rem] gap-2 md:gap-3 px-3 md:px-4 py-3 md:py-2 rounded-md cursor-pointer transition-colors items-center group border-b border-zinc-800/50 md:border-0 last:border-0 ${
                   active ? 'bg-zinc-700/40' : 'hover:bg-zinc-700/20'
                 }`}
                 onClick={() => playSong(song, filtered, i)}
                 onMouseEnter={() => setHovered(song.id)}
                 onMouseLeave={() => setHovered(null)}
               >
-                {/* Index / play indicator */}
-                <div className="flex items-center justify-center">
+                {/* Index / play indicator — desktop only */}
+                <div className="hidden md:flex items-center justify-center">
                   {isHov || active
                     ? <Play size={13} className={`fill-current ${active && isPlaying ? 'text-green-400' : 'text-white'}`} />
                     : <span className={`text-sm ${active ? 'text-green-400' : 'text-zinc-500'}`}>{i + 1}</span>}
                 </div>
 
-                {/* Title + cover */}
+                {/* Title + cover (artist shown below on mobile) */}
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-10 h-10 bg-zinc-800 rounded shrink-0 overflow-hidden">
                     {song.has_cover
                       ? <img src={`/api/music/${song.id}/cover`} alt="" className="w-full h-full object-cover" />
                       : <div className="w-full h-full flex items-center justify-center text-zinc-600"><Music size={14} /></div>}
                   </div>
-                  <span className={`text-sm truncate ${active ? 'text-green-400' : 'text-white'}`}>{song.title}</span>
+                  <div className="min-w-0">
+                    <p className={`text-sm truncate ${active ? 'text-green-400' : 'text-white'}`}>{song.title}</p>
+                    <p className="text-xs text-zinc-400 truncate md:hidden">{song.artist}</p>
+                  </div>
                 </div>
 
-                <span className="text-zinc-400 text-sm truncate">{song.artist}</span>
-                <span className="text-zinc-400 text-sm truncate">{song.album}</span>
-                <span className="text-zinc-500 text-sm text-right">{fmt(song.duration)}</span>
+                {/* Artist — desktop only */}
+                <span className="hidden md:block text-zinc-400 text-sm truncate">{song.artist}</span>
+
+                {/* Album — desktop only */}
+                <span className="hidden md:block text-zinc-400 text-sm truncate">{song.album}</span>
+
+                {/* Time */}
+                <span className="text-zinc-500 text-xs md:text-sm text-right self-center">{fmt(song.duration)}</span>
 
                 {/* Actions */}
-                <div className="flex items-center justify-end gap-1 relative" onClick={(e) => e.stopPropagation()}>
-                  {/* Like button */}
+                <div className="flex items-center justify-end gap-0.5 md:gap-1 relative" onClick={(e) => e.stopPropagation()}>
+                  {/* Like button — always visible on mobile, hover-only on desktop */}
                   <button
                     onClick={() => toggleLike(song.id)}
-                    className={`p-1.5 transition-colors ${liked ? 'text-red-400' : 'text-zinc-600 hover:text-zinc-300 opacity-0 group-hover:opacity-100'}`}
+                    className={`p-2 md:p-1.5 transition-colors ${liked ? 'text-red-400' : 'text-zinc-500 hover:text-zinc-300 md:opacity-0 md:group-hover:opacity-100'}`}
                     title={liked ? 'Unlike' : 'Like'}
                   >
-                    <Heart size={14} className={liked ? 'fill-current' : ''} />
+                    <Heart size={15} className={liked ? 'fill-current' : ''} />
                   </button>
 
-                  {/* Remove from playlist (playlist view only) */}
+                  {/* Remove from playlist — desktop only */}
                   {view === 'playlist' && currentPlaylist && (
                     <button
                       onClick={() => removeFromPlaylist(currentPlaylist.id, song.id)}
-                      className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                      className="hidden md:block p-1.5 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                       title="Remove from playlist"
                     >
                       <X size={14} />
                     </button>
                   )}
 
-                  {/* Add to playlist */}
-                  <div className="relative">
+                  {/* Add to playlist — desktop only */}
+                  <div className="relative hidden md:block">
                     <button
                       onClick={() => setMenuOpen(menuOpen === song.id ? null : song.id)}
                       className="p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
@@ -259,9 +268,9 @@ export default function Library({ view = 'all' }) {
                     )}
                   </div>
 
-                  {/* Find on YouTube */}
+                  {/* Find on YouTube — desktop only */}
                   <button
-                    className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                    className="hidden md:block p-1.5 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                     title="Find on YouTube"
                     onClick={() => navigate(`/youtube?q=${encodeURIComponent(`${song.artist} ${song.title}`)}`)}
                   >
