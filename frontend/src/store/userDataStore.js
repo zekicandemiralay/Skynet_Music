@@ -1,5 +1,12 @@
 import { create } from 'zustand';
 
+function uuid() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
 async function save(key, data) {
   await fetch(`/api/me/data/${key}`, {
     method: 'PUT',
@@ -46,7 +53,7 @@ const useUserDataStore = create((set, get) => ({
   // ── Playlists ─────────────────────────────────────────────────────────────
 
   createPlaylist: async (name) => {
-    const playlist = { id: crypto.randomUUID(), name, songs: [] };
+    const playlist = { id: uuid(), name, songs: [] };
     const next = [...get().playlists, playlist];
     set({ playlists: next });
     await save('playlists', next);
