@@ -10,6 +10,10 @@ services:
       - PORT=3001
       - MUSIC_DIR=/music
       - DB_PATH=/app/data/music.db
+      - JWT_SECRET=${JWT_SECRET:-insecure-default-change-in-production}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - SECURE_COOKIE=${SECURE_COOKIE:-false}
     restart: unless-stopped
     networks:
       - app-network

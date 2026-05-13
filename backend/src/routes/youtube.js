@@ -4,8 +4,11 @@ const { v4: uuidv4 } = require('uuid');
 const { searchYoutube, downloadAudio } = require('../services/ytdlp');
 const { getDb } = require('../db');
 const { scanFile } = require('../services/scanner');
+const { requireAuth } = require('../middleware/auth');
 
 const MUSIC_DIR = process.env.MUSIC_DIR || '/music';
+
+router.use(requireAuth);
 
 router.get('/search', async (req, res) => {
   const { q } = req.query;

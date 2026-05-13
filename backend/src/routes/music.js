@@ -5,8 +5,11 @@ const path = require('path');
 const mm = require('music-metadata');
 const { getDb } = require('../db');
 const { scanMusicDir } = require('../services/scanner');
+const { requireAuth } = require('../middleware/auth');
 
 const MUSIC_DIR = process.env.MUSIC_DIR || '/music';
+
+router.use(requireAuth);
 
 const MIME = {
   '.mp3': 'audio/mpeg',
