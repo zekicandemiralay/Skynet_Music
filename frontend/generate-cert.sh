@@ -26,9 +26,9 @@ CN = Skynet Music
 
 [v3_req]
 subjectAltName      = @alt_names
-keyUsage            = critical, digitalSignature, keyEncipherment
+keyUsage            = critical, digitalSignature, keyCertSign, cRLSign
 extendedKeyUsage    = serverAuth
-basicConstraints    = critical, CA:FALSE
+basicConstraints    = critical, CA:TRUE, pathLen:0
 
 [alt_names]
 IP.1  = ${SERVER_IP}
