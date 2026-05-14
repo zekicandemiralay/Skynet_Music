@@ -93,7 +93,21 @@ Your browser will warn about an untrusted certificate — this is expected for a
 
 ---
 
-### Step 6 — Create user accounts
+### Step 6 — Seed default collections (optional)
+
+This downloads 15 curated playlists (180+ songs) from YouTube and makes them visible to all users: Dinner Jazz, Morning Acoustic, Lo-fi Chill, Classical Focus, Workout Pump, Evening R&B, Blues Classics, Bossa Nova, Soul & Motown, Indie Folk, Electronic & House, 80s Classics, 90s Alternative, Hip Hop Classics, Ambient & Sleep.
+
+```bash
+docker compose exec backend npm run seed
+```
+
+The script is **safe to re-run** — songs and collections that already exist are skipped automatically. It downloads songs one at a time with a short pause between each, so expect it to take 30–60 minutes for the full set.
+
+After seeding, all users will see the collections in the sidebar and on the Home page. As an admin you can edit, add to, or delete any collection from **Admin → Collections**.
+
+---
+
+### Step 7 — Create user accounts
 
 1. Go to **Admin** in the sidebar
 2. Click **New User**, enter a username and password
