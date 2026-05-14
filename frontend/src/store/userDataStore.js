@@ -24,8 +24,14 @@ async function save(key, data) {
 }
 
 async function load(key) {
-  const res = await fetch(`/api/me/data/${key}`);
-  return res.ok ? res.json() : null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(`/api/me/data/${key}`, { signal: controller.signal });
+    return res.ok ? res.json() : null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const useUserDataStore = create((set, get) => ({

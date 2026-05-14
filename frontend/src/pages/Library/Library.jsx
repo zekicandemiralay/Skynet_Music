@@ -139,7 +139,10 @@ export default function Library({ view = 'all' }) {
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch('/api/music');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch('/api/music', { signal: controller.signal });
+      clearTimeout(timer);
       const data = await res.json();
       setSongs(data);
       try { localStorage.setItem('skynet_songs', JSON.stringify(data)); } catch {}
