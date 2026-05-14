@@ -2,6 +2,16 @@
 
 A self-hosted music player for your local network. Stream your music library, download from YouTube, manage users, and listen offline from any device.
 
+**Features:**
+- Personalized Home page with Daily Mixes, recently played songs, and listening stats
+- Stream from your local music library or download any song from YouTube
+- Smart Shuffle — weighted by play count, artist-interleaved so you never hear the same artist twice in a row
+- Admin-curated Collections visible to all users
+- Per-user Liked Songs and custom playlists
+- Listening stats: play counts, streaks, weekly listening time
+- Full offline support — download playlists and collections for offline playback
+- PWA — add to your home screen for a native-app experience
+
 ---
 
 ## Part 1 — Server Setup
@@ -66,9 +76,15 @@ To see the generated admin password:
 docker compose logs backend
 ```
 
-Look for a line like:
+Look for a box like this:
+
 ```
-[auth] Generated admin password: xxxxxxxx
+╔══════════════════════════════════════════╗
+║    Admin account created automatically    ║
+║    Username : admin                       ║
+║    Password : a3f9c1d8e2b7...            ║
+║    Save this — it will not show again     ║
+╚══════════════════════════════════════════╝
 ```
 
 **Write this down** — it is only printed once.
@@ -91,17 +107,21 @@ Your browser will warn about an untrusted certificate — this is expected for a
 2. Go to **Library** and click **Scan Library** to index your music folder
 3. To add more music later, just drop files into your `MUSIC_DIR` folder and scan again
 
+You can also download individual songs from YouTube: go to **YouTube** in the sidebar, search for a song, and click Download.
+
 ---
 
 ### Step 6 — Seed default collections (optional)
 
-This downloads 15 curated playlists (180+ songs) from YouTube and makes them visible to all users: Dinner Jazz, Morning Acoustic, Lo-fi Chill, Classical Focus, Workout Pump, Evening R&B, Blues Classics, Bossa Nova, Soul & Motown, Indie Folk, Electronic & House, 80s Classics, 90s Alternative, Hip Hop Classics, Ambient & Sleep.
+This downloads 15 curated collections (180+ songs) from YouTube and makes them visible to all users:
+
+> Dinner Jazz · Morning Acoustic · Lo-fi Chill · Classical Focus · Workout Pump · Evening R&B · Blues Classics · Bossa Nova · Soul & Motown · Indie Folk · Electronic & House · 80s Classics · 90s Alternative · Hip Hop Classics · Ambient & Sleep
 
 ```bash
 docker compose exec backend npm run seed
 ```
 
-The script is **safe to re-run** — songs and collections that already exist are skipped automatically. It downloads songs one at a time with a short pause between each, so expect it to take 30–60 minutes for the full set.
+The script is **safe to re-run** — songs and collections that already exist are skipped automatically. It downloads songs one at a time with a short pause between each, so **expect it to take 30–60 minutes** for the full set. Internet access is required during seeding.
 
 After seeding, all users will see the collections in the sidebar and on the Home page. As an admin you can edit, add to, or delete any collection from **Admin → Collections**.
 
@@ -113,6 +133,18 @@ After seeding, all users will see the collections in the sidebar and on the Home
 2. Click **New User**, enter a username and password
 3. Share the server address (`https://YOUR_SERVER_IP:4000`) and their credentials with them
 4. Direct them to **Part 2** of this guide to set up their device
+
+---
+
+### Managing Collections (admin)
+
+Collections are curated playlists that appear for all users on the Home page and sidebar. You manage them from **Admin → Collections**.
+
+**Create a collection:**
+1. Click **New Collection**, enter a name, description, and pick a colour
+2. Open the collection and use the **Library** button to add songs from your existing library, or the **YouTube** button to search for and download a new song directly into the collection
+
+**Edit or delete:** Click the collection name to expand it, then use the edit form or the Delete button.
 
 ---
 
@@ -168,6 +200,30 @@ You need two things from the server admin:
 - Your **username and password**
 
 The app runs over HTTPS using a self-signed certificate (not from a public authority like Let's Encrypt). You need to install and trust this certificate once on each device. After that, the app works like any normal website and can be added to your home screen like a native app.
+
+---
+
+### What you'll find in the app
+
+**Home** — Your personal landing page. Shows a greeting, your current listening streak, recently played songs, your playlists for quick access, your Daily Mixes, and any Collections the admin has created.
+
+**Daily Mixes** — Auto-generated playlists based on your listening history:
+- *Your Mix* — songs you've been playing most
+- *Rediscovery* — songs in the library you haven't heard in a while
+- *Artist Focus* — deep dives into your most-played artists
+- *Genre* — playlists by genre, drawn from your library
+
+Mixes refresh each time you log in. Use the **Refresh Mix** button inside a mix to regenerate it on demand.
+
+**Library** — Browse all songs, search, filter, and manage your Liked Songs and playlists.
+
+**YouTube** — Search for any song and download it to the library.
+
+**Collections** — Curated playlists from the admin (e.g. Dinner Jazz, Lo-fi Chill, 80s Classics).
+
+**Stats** — Your listening history: total play count, listening time, streaks, and top songs.
+
+**Smart Shuffle** — When you shuffle any playlist or collection, songs are weighted by how often you've played them and arranged so the same artist never plays back-to-back.
 
 ---
 
@@ -328,7 +384,7 @@ If you just want to access the app without installing the certificate permanentl
 
 Once you are logged in and have browsed around at least once while connected:
 
-1. Open any playlist or **Liked Songs**
+1. Open any playlist, collection, or **Liked Songs**
 2. Tap the **Save offline** button next to the Shuffle button
 3. Wait for the download to complete — the button turns green when done
 4. You can now listen to those songs without an internet connection
@@ -353,3 +409,6 @@ This is normal on first launch — the home screen app has its own separate sess
 
 **Can't find the cert download page**  
 Make sure you're using `http://` (not `https://`) and port `8080` (not `4000`).
+
+**Daily Mixes are empty**  
+Mixes are generated from your listening history. Play some songs first — after a few listens they will start to populate.
