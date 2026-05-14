@@ -5,6 +5,7 @@ import usePlayerStore from '../../store/playerStore';
 import useUserDataStore from '../../store/userDataStore';
 import useOfflineStore from '../../store/useOfflineStore';
 import useMixStore from '../../store/useMixStore';
+import useFeaturedStore from '../../store/useFeaturedStore';
 
 function OfflineButton({ songs }) {
   const { cachedIds, downloading, cacheSongs, removeSongs } = useOfflineStore();
@@ -149,13 +150,14 @@ const MIX_ICONS = {
 };
 
 export default function Library({ view = 'all' }) {
-  const { playlistId, mixId } = useParams();
+  const { playlistId, mixId, featuredId } = useParams();
   const mixData = useMixStore((s) => view === 'mix' ? s.getMix(mixId) : null);
+  const featuredData = useFeaturedStore((s) => view === 'featured' ? s.getPlaylist(featuredId) : null);
   const [songs, setSongs] = useState(() => {
     try { return JSON.parse(localStorage.getItem('skynet_songs') || '[]'); } catch { return []; }
   });
   // Only show loading spinner if we have no cached songs to display
-  const [loading, setLoading] = useState(() => view !== 'mix' && !localStorage.getItem('skynet_songs'));
+  const [loading, setLoading] = useState(() => view !== 'mix' && view !== 'featured' && !localStorage.getItem('skynet_songs'));
   const [scanning, setScanning] = useState(false);
   const [search, setSearch] = useState('');
   const [hovered, setHovered] = useState(null);
@@ -166,7 +168,18 @@ export default function Library({ view = 'all' }) {
   const loadMixes = useMixStore((s) => s.loadMixes);
   const navigate = useNavigate();
 
-  useEffect(() => { if (view !== 'mix') load(); }, []);
+  useEffect(() => { if (view !== 'mix' && view !== 'featured') load(); }, []);
+
+  // Track recently accessed playlists for home page quick access
+  useEffect(() => {
+    if (view === 'playlist' && playlistId) {
+      try {
+        const recents = JSON.parse(localStorage.getItem('skynet_playlist_recents') || '{}');
+        recents[playlistId] = Date.now();
+        localStorage.setItem('skynet_playlist_recents', JSON.stringify(recents));
+      } catch {}
+    }
+  }, [view, playlistId]);
 
   async function load() {
     setLoading(true);
@@ -201,6 +214,7 @@ export default function Library({ view = 'all' }) {
     visibleSongs = order.map((id) => songs.find((s) => s.id === id)).filter(Boolean);
   }
   if (view === 'mix') visibleSongs = mixData ? mixData.songs : [];
+  if (view === 'featured') visibleSongs = featuredData ? featuredData.songs : [];
 
   const filtered = visibleSongs.filter(
     (s) => !search || [s.title, s.artist, s.album].some((f) => f?.toLowerCase().includes(search.toLowerCase()))
@@ -210,12 +224,14 @@ export default function Library({ view = 'all' }) {
     view === 'liked' ? 'Liked Songs' :
     view === 'playlist' ? (currentPlaylist?.name || 'Playlist') :
     view === 'mix' ? (mixData?.name || 'Mix') :
+    view === 'featured' ? (featuredData?.name || 'Collection') :
     'Your Library';
 
   const subheading =
     view === 'liked' ? `${filtered.length} liked songs` :
     view === 'playlist' ? `${filtered.length} songs` :
     view === 'mix' ? (mixData?.description || `${filtered.length} songs`) :
+    view === 'featured' ? (featuredData?.description || `${filtered.length} songs`) :
     `${songs.length} songs`;
 
   return (
@@ -224,6 +240,13 @@ export default function Library({ view = 'all' }) {
         <div className="flex items-center gap-3">
           {view === 'liked' && <Heart size={32} className="text-red-400 fill-current md:text-4xl" />}
           {view === 'mix' && mixData && MIX_ICONS[mixData.type]}
+          {view === 'featured' && featuredData && (
+            <div className="w-10 h-10 rounded-lg shrink-0" style={{ backgroundColor: featuredData.color + '33' }}>
+              <div className="w-full h-full rounded-lg flex items-center justify-center" style={{ color: featuredData.color }}>
+                <Music size={20} />
+              </div>
+            </div>
+          )}
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-white">{heading}</h1>
             <p className="text-zinc-400 text-sm mt-1">{subheading}</p>
@@ -295,6 +318,7 @@ export default function Library({ view = 'all' }) {
             {view === 'liked' ? 'No liked songs yet' :
              view === 'playlist' ? 'This playlist is empty' :
              view === 'mix' ? 'Mix is empty — keep listening to build it up' :
+             view === 'featured' ? 'This collection is empty' :
              songs.length === 0 ? 'No music in library yet' : 'No results'}
           </p>
           {view === 'all' && songs.length === 0 && view !== 'mix' && (

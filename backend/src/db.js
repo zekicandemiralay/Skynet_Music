@@ -88,6 +88,27 @@ function initDb() {
   }
 
   database.exec(`
+    CREATE TABLE IF NOT EXISTS featured_playlists (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      color TEXT DEFAULT '#7c3aed',
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS featured_playlist_songs (
+      playlist_id TEXT NOT NULL,
+      song_id TEXT NOT NULL,
+      position INTEGER DEFAULT 0,
+      PRIMARY KEY (playlist_id, song_id),
+      FOREIGN KEY (playlist_id) REFERENCES featured_playlists(id) ON DELETE CASCADE,
+      FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE CASCADE
+    );
+  `);
+
+  database.exec(`
     CREATE TABLE IF NOT EXISTS listening_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL,

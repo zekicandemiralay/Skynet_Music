@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Music, Flame, Sparkles, Clock, Mic2, Library, ChevronRight } from 'lucide-react';
+import { Play, Music, Flame, Sparkles, Clock, Mic2, Library, ChevronRight, ListMusic } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import usePlayerStore from '../../store/playerStore';
+import useUserDataStore from '../../store/userDataStore';
 import useMixStore from '../../store/useMixStore';
+import useFeaturedStore from '../../store/useFeaturedStore';
 
 const MIX_STYLES = {
   your_mix:     { icon: Sparkles, bg: 'from-purple-900/60 to-purple-800/30', border: 'border-purple-700/30', iconColor: 'text-purple-400' },
@@ -56,6 +58,36 @@ function SongCard({ song, queue, queueIndex, onPlay }) {
   );
 }
 
+function CollectionCard({ playlist }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      onClick={() => navigate(`/featured/${playlist.id}`)}
+      className="group relative flex flex-col gap-3 p-4 rounded-xl text-left hover:scale-[1.02] transition-transform w-full border"
+      style={{
+        background: `linear-gradient(135deg, ${playlist.color}33, ${playlist.color}11)`,
+        borderColor: playlist.color + '44',
+      }}
+    >
+      <div className="flex items-start justify-between">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: playlist.color + '33', color: playlist.color }}>
+          <Music size={16} />
+        </div>
+        <span className="text-zinc-500 text-xs">{playlist.songs?.length || 0} songs</span>
+      </div>
+      <div>
+        <p className="text-white font-semibold text-sm">{playlist.name}</p>
+        {playlist.description && <p className="text-zinc-400 text-xs mt-0.5 line-clamp-2">{playlist.description}</p>}
+      </div>
+      <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg">
+          <Play size={12} className="fill-current text-black ml-0.5" />
+        </div>
+      </div>
+    </button>
+  );
+}
+
 function MixCard({ mix }) {
   const navigate = useNavigate();
   const style = MIX_STYLES[mix.type] || MIX_STYLES.genre;
@@ -83,10 +115,22 @@ function MixCard({ mix }) {
   );
 }
 
+function getRecentPlaylists(playlists) {
+  try {
+    const recents = JSON.parse(localStorage.getItem('skynet_playlist_recents') || '{}');
+    return [...playlists]
+      .filter((p) => p.songs?.length > 0 || recents[p.id])
+      .sort((a, b) => (recents[b.id] || 0) - (recents[a.id] || 0))
+      .slice(0, 6);
+  } catch { return playlists.slice(0, 6); }
+}
+
 export default function Home() {
   const { user } = useAuthStore();
   const { playSong, shufflePlay } = usePlayerStore();
+  const { playlists: userPlaylists } = useUserDataStore();
   const { mixes } = useMixStore();
+  const { playlists: featuredPlaylists } = useFeaturedStore();
   const navigate = useNavigate();
 
   const [data, setData] = useState(null);
@@ -105,7 +149,8 @@ export default function Home() {
   const recentlyPlayed = data?.recentlyPlayed || [];
   const streak = data?.streak || 0;
   const weekTime = fmtTime(data?.weekSeconds);
-  const isEmpty = recentlyPlayed.length === 0 && mixes.length === 0;
+  const recentPlaylists = getRecentPlaylists(userPlaylists);
+  const isEmpty = recentlyPlayed.length === 0 && mixes.length === 0 && featuredPlaylists.length === 0 && recentPlaylists.length === 0;
 
   return (
     <div className="p-4 md:p-6 max-w-4xl">
@@ -172,6 +217,34 @@ export default function Home() {
             </section>
           )}
 
+          {/* ── Your Playlists ───────────────────────────────────────────── */}
+          {recentPlaylists.length > 0 && (
+            <section className="mb-8">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-white font-bold text-lg">Your Playlists</h2>
+                {userPlaylists.length > 6 && (
+                  <button onClick={() => navigate('/liked')} className="flex items-center gap-1 text-zinc-400 hover:text-white text-sm transition-colors">
+                    See all <ChevronRight size={14} />
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {recentPlaylists.map((pl) => (
+                  <button
+                    key={pl.id}
+                    onClick={() => navigate(`/playlist/${pl.id}`)}
+                    className="flex items-center gap-3 bg-zinc-800/50 hover:bg-zinc-700/50 rounded-lg p-2.5 text-left transition-colors group"
+                  >
+                    <div className="w-10 h-10 bg-zinc-700 rounded flex items-center justify-center shrink-0">
+                      <ListMusic size={16} className="text-zinc-400" />
+                    </div>
+                    <span className="text-white text-sm font-medium truncate">{pl.name}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* ── Your Mixes ───────────────────────────────────────────────── */}
           {mixes.length > 0 && (
             <section className="mb-8">
@@ -189,6 +262,18 @@ export default function Home() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {mixes.slice(0, 6).map((mix) => (
                   <MixCard key={mix.id} mix={mix} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* ── Collections (admin-curated) ──────────────────────────────── */}
+          {featuredPlaylists.length > 0 && (
+            <section className="mb-8">
+              <h2 className="text-white font-bold text-lg mb-3">Collections</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {featuredPlaylists.map((pl) => (
+                  <CollectionCard key={pl.id} playlist={pl} />
                 ))}
               </div>
             </section>

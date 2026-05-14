@@ -22,7 +22,7 @@ router.get('/search', async (req, res) => {
 });
 
 router.post('/download', (req, res) => {
-  const { videoId, title } = req.body;
+  const { videoId, title, featuredPlaylistId } = req.body;
   if (!videoId) return res.status(400).json({ error: 'videoId required' });
 
   const jobId = uuidv4();
@@ -41,6 +41,15 @@ router.post('/download', (req, res) => {
       db.prepare('UPDATE downloads SET status = ?, progress = 100, song_id = ? WHERE id = ?').run(
         'done', song?.id || null, jobId
       );
+      // Auto-add to featured playlist if requested
+      if (featuredPlaylistId && song?.id) {
+        const { maxPos } = db.prepare(
+          'SELECT COALESCE(MAX(position), -1) as maxPos FROM featured_playlist_songs WHERE playlist_id = ?'
+        ).get(featuredPlaylistId);
+        db.prepare(
+          'INSERT OR IGNORE INTO featured_playlist_songs (playlist_id, song_id, position) VALUES (?, ?, ?)'
+        ).run(featuredPlaylistId, song.id, maxPos + 1);
+      }
     })
     .catch((err) => {
       db.prepare('UPDATE downloads SET status = ?, error = ? WHERE id = ?').run(
