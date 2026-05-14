@@ -39,27 +39,23 @@ const useUserDataStore = create((set, get) => ({
   playlists: [],    // { id, name, songs: string[] }[]
   loaded: false,
 
-  load: async () => {
-    // Show cached data immediately — no waiting
+  load: () => {
+    // Show cached data immediately — synchronous, no waiting
     set({
       likedSongs: lsGet('skynet_liked_songs') || [],
       playlists: lsGet('skynet_playlists') || [],
       loaded: true,
     });
-    // Refresh from server in background
-    try {
-      const [liked, playlists] = await Promise.all([
-        load('liked_songs'),
-        load('playlists'),
-      ]);
-      const likedSongs = liked || lsGet('skynet_liked_songs') || [];
-      const pls = playlists || lsGet('skynet_playlists') || [];
-      lsSet('skynet_liked_songs', likedSongs);
-      lsSet('skynet_playlists', pls);
-      set({ likedSongs, playlists: pls });
-    } catch {
-      // Offline — already showing localStorage data above, nothing to do
-    }
+    // Refresh from server — truly fire-and-forget, never blocks the caller
+    Promise.all([load('liked_songs'), load('playlists')])
+      .then(([liked, playlists]) => {
+        const likedSongs = liked || lsGet('skynet_liked_songs') || [];
+        const pls = playlists || lsGet('skynet_playlists') || [];
+        lsSet('skynet_liked_songs', likedSongs);
+        lsSet('skynet_playlists', pls);
+        set({ likedSongs, playlists: pls });
+      })
+      .catch(() => {});
   },
 
   reset: () => set({ likedSongs: [], playlists: [], loaded: false }),
