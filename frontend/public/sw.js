@@ -1,9 +1,7 @@
-const CACHE = 'skynet-v3';
+const CACHE = 'skynet-v4';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.add('/')).then(() => self.skipWaiting())
-  );
+  e.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (e) => {
@@ -20,21 +18,22 @@ self.addEventListener('fetch', (e) => {
   // Never intercept API calls
   if (pathname.startsWith('/api/')) return;
 
-  // Navigation: serve cached shell instantly, no network wait
+  // Navigation (HTML): network-first so the app always loads with the latest
+  // JS/CSS filenames after a deploy. Falls back to cache only when offline.
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      caches.match('/').then((cached) =>
-        cached || fetch(e.request).then((res) => {
+      fetch(e.request)
+        .then((res) => {
           caches.open(CACHE).then((c) => c.put('/', res.clone()));
           return res;
         })
-      )
+        .catch(() => caches.match('/'))
     );
     return;
   }
 
-  // Static assets: serve from cache immediately if available,
-  // always fetch in background to keep cache fresh
+  // Static assets (JS, CSS, images): content-hashed by Vite so safe to cache
+  // forever. Serve from cache instantly; fetch in background to warm new hashes.
   e.respondWith(
     caches.match(e.request).then((cached) => {
       const update = fetch(e.request)
