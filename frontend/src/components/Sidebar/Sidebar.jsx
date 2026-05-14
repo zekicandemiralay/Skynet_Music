@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Music2, Youtube, Library, Heart, ListMusic, Plus, ShieldCheck, LogOut, Trash2, Check, KeyRound, X, BarChart2, Sparkles, Clock, Mic2, Music } from 'lucide-react';
+import { Music2, Youtube, Library, Heart, ListMusic, Plus, ShieldCheck, LogOut, Trash2, Check, KeyRound, X, BarChart2, Sparkles, Clock, Mic2, Music, Home } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import useUserDataStore from '../../store/userDataStore';
 import useMixStore from '../../store/useMixStore';
@@ -162,6 +162,10 @@ export default function Sidebar({ onNavigate }) {
           <span className="text-white font-bold text-base">Skynet Music</span>
         </div>
         <nav className="space-y-0.5">
+          <NavLink to="/" end className={linkClass} onClick={onNavigate}>
+            <Home size={18} />
+            Home
+          </NavLink>
           <NavLink to="/library" className={linkClass} onClick={onNavigate}>
             <Library size={18} />
             Library

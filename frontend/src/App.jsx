@@ -8,6 +8,7 @@ import Library from './pages/Library/Library';
 import YouTube from './pages/YouTube/YouTube';
 import Admin from './pages/Admin/Admin';
 import Stats from './pages/Stats/Stats';
+import Home from './pages/Home/Home';
 import useOfflineStore from './store/useOfflineStore';
 import useMixStore from './store/useMixStore';
 
@@ -54,7 +55,7 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <Routes>
-                <Route path="/" element={<Navigate to="/liked" replace />} />
+                <Route path="/" element={<Home />} />
                 <Route path="/library" element={<Library />} />
                 <Route path="/liked" element={<Library view="liked" />} />
                 <Route path="/playlist/:playlistId" element={<Library view="playlist" />} />
