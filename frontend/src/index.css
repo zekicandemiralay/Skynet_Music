@@ -55,6 +55,17 @@ input[type="range"]:focus::-webkit-slider-thumb {
   opacity: 1;
 }
 
+/* Animated equalizer bars — shown on the currently playing song row */
+@keyframes eq1 { 0%,100% { height: 3px } 50% { height: 12px } }
+@keyframes eq2 { 0%,100% { height: 10px } 50% { height: 3px } }
+@keyframes eq3 { 0%,100% { height: 6px } 50% { height: 13px } }
+
+.eq-bar { width: 3px; border-radius: 1px; background: #4ade80; display: inline-block; }
+.eq-bar:nth-child(1) { animation: eq1 0.8s ease-in-out infinite; }
+.eq-bar:nth-child(2) { animation: eq2 0.8s ease-in-out infinite 0.15s; }
+.eq-bar:nth-child(3) { animation: eq3 0.8s ease-in-out infinite 0.3s; }
+.eq-paused .eq-bar { animation-play-state: paused; }
+
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

@@ -141,7 +141,17 @@ const usePlayerStore = create((set, get) => ({
     get().playSong(shuffled[0], shuffled, 0);
   },
 
-  toggleShuffle: () => set((s) => ({ shuffle: !s.shuffle })),
+  toggleShuffle: () => {
+    const { shuffle, queue, currentSong } = get();
+    const newShuffle = !shuffle;
+    if (newShuffle && queue.length > 1 && currentSong) {
+      // Keep current song at index 0, smartShuffle everything else
+      const others = queue.filter((s) => s.id !== currentSong.id);
+      set({ shuffle: true, queue: [currentSong, ...smartShuffle(others)], queueIndex: 0 });
+    } else {
+      set({ shuffle: newShuffle });
+    }
+  },
 
   seek: (time) => { audio.currentTime = time; set({ currentTime: time }); },
   setVolume: (v) => { audio.volume = v; set({ volume: v }); },

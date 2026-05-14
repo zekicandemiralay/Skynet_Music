@@ -359,9 +359,17 @@ export default function Library({ view = 'all' }) {
               >
                 {/* Index / play indicator — desktop only */}
                 <div className="hidden md:flex items-center justify-center">
-                  {isHov || active
-                    ? <Play size={13} className={`fill-current ${active && isPlaying ? 'text-green-400' : 'text-white'}`} />
-                    : <span className={`text-sm ${active ? 'text-green-400' : 'text-zinc-500'}`}>{i + 1}</span>}
+                  {active && !isHov ? (
+                    <div className={`flex items-end gap-[2px] h-4 ${isPlaying ? '' : 'eq-paused'}`}>
+                      <span className="eq-bar" />
+                      <span className="eq-bar" />
+                      <span className="eq-bar" />
+                    </div>
+                  ) : isHov ? (
+                    <Play size={13} className={`fill-current ${active ? 'text-green-400' : 'text-white'}`} />
+                  ) : (
+                    <span className="text-sm text-zinc-500">{i + 1}</span>
+                  )}
                 </div>
 
                 {/* Title + cover (artist shown below on mobile) */}
@@ -381,9 +389,9 @@ export default function Library({ view = 'all' }) {
                       </div>
                     )}
                   </div>
-                  <div className="min-w-0">
-                    <p className={`text-sm truncate ${active ? 'text-green-400' : 'text-white'}`}>{song.title}</p>
-                    <p className="text-xs text-zinc-400 truncate md:hidden">{song.artist}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm truncate font-medium ${active ? 'text-green-400' : 'text-white'}`}>{song.title}</p>
+                    <p className={`text-xs truncate md:hidden ${active ? 'text-green-400/70' : 'text-zinc-400'}`}>{song.artist}</p>
                   </div>
                 </div>
 
