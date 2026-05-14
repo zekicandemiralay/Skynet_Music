@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Play, Search, RefreshCw, Music, Youtube, Heart, ListPlus, X, Shuffle, Download, WifiOff } from 'lucide-react';
+import { Play, Search, RefreshCw, Music, Youtube, Heart, ListPlus, X, Shuffle, Download, WifiOff, Sparkles, Clock, Mic2 } from 'lucide-react';
 import usePlayerStore from '../../store/playerStore';
 import useUserDataStore from '../../store/userDataStore';
 import useOfflineStore from '../../store/useOfflineStore';
+import useMixStore from '../../store/useMixStore';
 
 function OfflineButton({ songs }) {
   const { cachedIds, downloading, cacheSongs, removeSongs } = useOfflineStore();
@@ -140,13 +141,21 @@ function AddToPlaylistMenu({ songId, onClose }) {
   );
 }
 
+const MIX_ICONS = {
+  your_mix: <Sparkles size={32} className="text-purple-400" />,
+  rediscovery: <Clock size={32} className="text-amber-400" />,
+  artist_focus: <Mic2 size={32} className="text-blue-400" />,
+  genre: <Music size={32} className="text-green-400" />,
+};
+
 export default function Library({ view = 'all' }) {
-  const { playlistId } = useParams();
+  const { playlistId, mixId } = useParams();
+  const mixData = useMixStore((s) => view === 'mix' ? s.getMix(mixId) : null);
   const [songs, setSongs] = useState(() => {
     try { return JSON.parse(localStorage.getItem('skynet_songs') || '[]'); } catch { return []; }
   });
   // Only show loading spinner if we have no cached songs to display
-  const [loading, setLoading] = useState(() => !localStorage.getItem('skynet_songs'));
+  const [loading, setLoading] = useState(() => view !== 'mix' && !localStorage.getItem('skynet_songs'));
   const [scanning, setScanning] = useState(false);
   const [search, setSearch] = useState('');
   const [hovered, setHovered] = useState(null);
@@ -154,9 +163,10 @@ export default function Library({ view = 'all' }) {
   const { playSong, currentSong, isPlaying, shufflePlay } = usePlayerStore();
   const { cachedIds, downloading } = useOfflineStore();
   const { likedSongs, playlists, toggleLike, removeFromPlaylist } = useUserDataStore();
+  const loadMixes = useMixStore((s) => s.loadMixes);
   const navigate = useNavigate();
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (view !== 'mix') load(); }, []);
 
   async function load() {
     setLoading(true);
@@ -190,6 +200,7 @@ export default function Library({ view = 'all' }) {
     const order = currentPlaylist.songs;
     visibleSongs = order.map((id) => songs.find((s) => s.id === id)).filter(Boolean);
   }
+  if (view === 'mix') visibleSongs = mixData ? mixData.songs : [];
 
   const filtered = visibleSongs.filter(
     (s) => !search || [s.title, s.artist, s.album].some((f) => f?.toLowerCase().includes(search.toLowerCase()))
@@ -198,11 +209,13 @@ export default function Library({ view = 'all' }) {
   const heading =
     view === 'liked' ? 'Liked Songs' :
     view === 'playlist' ? (currentPlaylist?.name || 'Playlist') :
+    view === 'mix' ? (mixData?.name || 'Mix') :
     'Your Library';
 
   const subheading =
     view === 'liked' ? `${filtered.length} liked songs` :
     view === 'playlist' ? `${filtered.length} songs` :
+    view === 'mix' ? (mixData?.description || `${filtered.length} songs`) :
     `${songs.length} songs`;
 
   return (
@@ -210,6 +223,7 @@ export default function Library({ view = 'all' }) {
       <div className="flex items-start justify-between mb-5 md:mb-6">
         <div className="flex items-center gap-3">
           {view === 'liked' && <Heart size={32} className="text-red-400 fill-current md:text-4xl" />}
+          {view === 'mix' && mixData && MIX_ICONS[mixData.type]}
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-white">{heading}</h1>
             <p className="text-zinc-400 text-sm mt-1">{subheading}</p>
@@ -236,6 +250,15 @@ export default function Library({ view = 'all' }) {
             >
               <RefreshCw size={15} className={scanning ? 'animate-spin' : ''} />
               <span className="hidden sm:inline">{scanning ? 'Scanning…' : 'Scan Library'}</span>
+            </button>
+          )}
+          {view === 'mix' && (
+            <button
+              onClick={loadMixes}
+              className="flex items-center gap-2 px-3 md:px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-full text-sm font-medium transition-colors"
+            >
+              <RefreshCw size={15} />
+              <span className="hidden sm:inline">Refresh Mix</span>
             </button>
           )}
         </div>
@@ -271,9 +294,10 @@ export default function Library({ view = 'all' }) {
           <p className="text-zinc-400 text-lg mb-2">
             {view === 'liked' ? 'No liked songs yet' :
              view === 'playlist' ? 'This playlist is empty' :
+             view === 'mix' ? 'Mix is empty — keep listening to build it up' :
              songs.length === 0 ? 'No music in library yet' : 'No results'}
           </p>
-          {view === 'all' && songs.length === 0 && (
+          {view === 'all' && songs.length === 0 && view !== 'mix' && (
             <button
               onClick={() => navigate('/youtube')}
               className="mt-3 inline-flex items-center gap-2 px-5 py-2 bg-red-600 hover:bg-red-500 text-white rounded-full text-sm font-medium transition-colors"

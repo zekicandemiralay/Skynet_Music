@@ -21,10 +21,20 @@ const MIME = {
   '.aac': 'audio/aac',
 };
 
-router.get('/', (_req, res) => {
+router.get('/', (req, res) => {
   const songs = getDb()
-    .prepare('SELECT * FROM songs ORDER BY artist, album, track, title')
-    .all();
+    .prepare(`
+      SELECT s.*, COALESCE(pc.play_count, 0) as play_count
+      FROM songs s
+      LEFT JOIN (
+        SELECT song_id, COUNT(*) as play_count
+        FROM listening_history
+        WHERE user_id = ?
+        GROUP BY song_id
+      ) pc ON s.id = pc.song_id
+      ORDER BY s.artist, s.album, s.track, s.title
+    `)
+    .all(req.user.id);
   res.json(songs);
 });
 

@@ -9,6 +9,7 @@ import YouTube from './pages/YouTube/YouTube';
 import Admin from './pages/Admin/Admin';
 import Stats from './pages/Stats/Stats';
 import useOfflineStore from './store/useOfflineStore';
+import useMixStore from './store/useMixStore';
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuthStore();
@@ -23,6 +24,8 @@ export default function App() {
   const loadUserData = useUserDataStore((s) => s.load);
   const resetUserData = useUserDataStore((s) => s.reset);
   const initOffline = useOfflineStore((s) => s.init);
+  const loadMixes = useMixStore((s) => s.loadMixes);
+  const resetMixes = useMixStore((s) => s.reset);
 
   useEffect(() => {
     checkSession();
@@ -30,8 +33,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user) loadUserData();
-    else resetUserData();
+    if (user) { loadUserData(); loadMixes(); }
+    else { resetUserData(); resetMixes(); }
   }, [user?.id]);
 
   if (loading) {
@@ -55,6 +58,7 @@ export default function App() {
                 <Route path="/library" element={<Library />} />
                 <Route path="/liked" element={<Library view="liked" />} />
                 <Route path="/playlist/:playlistId" element={<Library view="playlist" />} />
+                <Route path="/mix/:mixId" element={<Library view="mix" />} />
                 <Route path="/youtube" element={<YouTube />} />
                 <Route path="/stats" element={<Stats />} />
                 <Route path="/admin" element={

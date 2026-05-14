@@ -1,8 +1,16 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Music2, Youtube, Library, Heart, ListMusic, Plus, ShieldCheck, LogOut, Trash2, Check, KeyRound, X, BarChart2 } from 'lucide-react';
+import { Music2, Youtube, Library, Heart, ListMusic, Plus, ShieldCheck, LogOut, Trash2, Check, KeyRound, X, BarChart2, Sparkles, Clock, Mic2, Music } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import useUserDataStore from '../../store/userDataStore';
+import useMixStore from '../../store/useMixStore';
+
+const MIX_ICONS = {
+  your_mix: <Sparkles size={15} className="text-purple-400 shrink-0" />,
+  rediscovery: <Clock size={15} className="text-amber-400 shrink-0" />,
+  artist_focus: <Mic2 size={15} className="text-blue-400 shrink-0" />,
+  genre: <Music size={15} className="text-green-400 shrink-0" />,
+};
 
 function ChangePasswordModal({ onClose }) {
   const [current, setCurrent] = useState('');
@@ -118,6 +126,7 @@ function PlaylistItem({ playlist, onNavigate }) {
 export default function Sidebar({ onNavigate }) {
   const { user, logout } = useAuthStore();
   const { playlists, likedSongs, createPlaylist } = useUserDataStore();
+  const mixes = useMixStore((s) => s.mixes);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
@@ -180,6 +189,30 @@ export default function Sidebar({ onNavigate }) {
           )}
         </nav>
       </div>
+
+      {/* Mixes */}
+      {mixes.length > 0 && (
+        <div className="bg-zinc-900 rounded-lg p-3">
+          <span className="text-zinc-500 text-xs font-semibold uppercase tracking-wider px-1">Mixes</span>
+          <div className="space-y-0.5 mt-2">
+            {mixes.map((mix) => (
+              <NavLink
+                key={mix.id}
+                to={`/mix/${mix.id}`}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
+                    isActive ? 'text-white bg-zinc-800' : 'text-zinc-400 hover:text-white'
+                  }`
+                }
+                onClick={onNavigate}
+              >
+                {MIX_ICONS[mix.type]}
+                <span className="truncate">{mix.name}</span>
+              </NavLink>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Playlists */}
       <div className="bg-zinc-900 rounded-lg p-3 flex-1 min-h-0">

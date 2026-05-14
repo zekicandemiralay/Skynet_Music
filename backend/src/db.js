@@ -81,6 +81,12 @@ function initDb() {
     database.exec('ALTER TABLE downloads ADD COLUMN user_id TEXT');
   }
 
+  // Add genre to songs if missing (migration)
+  const songCols = database.pragma('table_info(songs)').map((c) => c.name);
+  if (!songCols.includes('genre')) {
+    database.exec('ALTER TABLE songs ADD COLUMN genre TEXT');
+  }
+
   database.exec(`
     CREATE TABLE IF NOT EXISTS listening_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -29,7 +29,8 @@ async function scanFile(filepath) {
     const needsRescan = !existing ||
       existing.artist === 'Unknown Artist' ||
       existing.album === 'Unknown Album' ||
-      !existing.has_cover;
+      !existing.has_cover ||
+      existing.genre === null;
 
     if (!needsRescan) return existing;
 
@@ -48,6 +49,7 @@ async function scanFile(filepath) {
       track: common.track?.no || existing?.track || 0,
       year: common.year || existing?.year || null,
       has_cover: hasCover ? 1 : 0,
+      genre: (common.genre && common.genre[0]) || existing?.genre || '',
     };
 
     // Merge: don't overwrite known-good fields with unknowns
@@ -63,16 +65,16 @@ async function scanFile(filepath) {
     if (!existing) {
       db.prepare(`
         INSERT OR IGNORE INTO songs
-          (id, filename, filepath, title, artist, album, duration, track, year, has_cover)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, filename, filepath, title, artist, album, duration, track, year, has_cover, genre)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(song.id, song.filename, song.filepath, song.title, song.artist,
-             song.album, song.duration, song.track, song.year, song.has_cover);
+             song.album, song.duration, song.track, song.year, song.has_cover, song.genre);
     } else {
       db.prepare(`
-        UPDATE songs SET title=?, artist=?, album=?, duration=?, track=?, year=?, has_cover=?
+        UPDATE songs SET title=?, artist=?, album=?, duration=?, track=?, year=?, has_cover=?, genre=?
         WHERE id=?
       `).run(song.title, song.artist, song.album, song.duration,
-             song.track, song.year, song.has_cover, song.id);
+             song.track, song.year, song.has_cover, song.genre, song.id);
     }
 
     return song;

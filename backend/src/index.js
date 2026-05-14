@@ -8,6 +8,7 @@ const musicRoutes = require('./routes/music');
 const youtubeRoutes = require('./routes/youtube');
 const userDataRoutes = require('./routes/userData');
 const statsRoutes = require('./routes/stats');
+const mixesRoutes = require('./routes/mixes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -28,6 +29,7 @@ app.use('/api/youtube', youtubeRoutes);
 app.use('/api/me/data', userDataRoutes);
 app.use('/api/me/stats', statsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/mixes', mixesRoutes);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Backend running on port ${PORT}`);

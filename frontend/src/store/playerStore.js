@@ -1,6 +1,50 @@
 import { create } from 'zustand';
 import { getAudioBlob } from '../lib/offlineLib';
 
+// Weighted shuffle: songs played more tend to appear earlier in the queue
+function weightedShuffle(songs) {
+  const items = songs.map((s) => ({ song: s, w: Math.pow(1 + (s.play_count || 0), 0.3) }));
+  const result = [];
+  while (items.length) {
+    const total = items.reduce((sum, x) => sum + x.w, 0);
+    let r = Math.random() * total;
+    let idx = items.length - 1;
+    for (let i = 0; i < items.length; i++) {
+      r -= items[i].w;
+      if (r <= 0) { idx = i; break; }
+    }
+    result.push(items.splice(idx, 1)[0].song);
+  }
+  return result;
+}
+
+// Artist interleaving: prevents the same artist from playing back-to-back
+function interleaveArtists(songs) {
+  if (songs.length <= 3) return songs;
+  const groups = {};
+  for (const s of songs) {
+    const key = s.artist || '';
+    (groups[key] = groups[key] || []).push(s);
+  }
+  const queues = Object.values(groups);
+  const result = [];
+  let lastArtist = null;
+  while (result.length < songs.length) {
+    const avail = queues.filter((q) => q.length > 0 && (q[0].artist || '') !== lastArtist);
+    const pool = avail.length ? avail : queues.filter((q) => q.length > 0);
+    if (!pool.length) break;
+    const chosen = pool[Math.floor(Math.random() * pool.length)];
+    const song = chosen.shift();
+    result.push(song);
+    lastArtist = song.artist || '';
+  }
+  return result;
+}
+
+function smartShuffle(songs) {
+  return interleaveArtists(weightedShuffle(songs));
+}
+
 const audio = new Audio();
 audio.preload = 'metadata';
 
@@ -74,17 +118,10 @@ const usePlayerStore = create((set, get) => ({
   resume: () => { audio.play(); set({ isPlaying: true }); },
 
   next: () => {
-    const { queue, queueIndex, shuffle } = get();
+    const { queue, queueIndex } = get();
     if (!queue.length) return;
-    let idx;
-    if (shuffle) {
-      const available = queue.map((_, i) => i).filter((i) => i !== queueIndex);
-      if (!available.length) return;
-      idx = available[Math.floor(Math.random() * available.length)];
-    } else {
-      idx = queueIndex + 1;
-      if (idx >= queue.length) return;
-    }
+    const idx = queueIndex + 1;
+    if (idx >= queue.length) return;
     get().playSong(queue[idx], queue, idx);
   },
 
@@ -99,7 +136,7 @@ const usePlayerStore = create((set, get) => ({
 
   shufflePlay: (songs) => {
     if (!songs.length) return;
-    const shuffled = [...songs].sort(() => Math.random() - 0.5);
+    const shuffled = smartShuffle(songs);
     set({ shuffle: true });
     get().playSong(shuffled[0], shuffled, 0);
   },
