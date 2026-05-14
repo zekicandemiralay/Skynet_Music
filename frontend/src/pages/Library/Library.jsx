@@ -121,7 +121,9 @@ function AddToPlaylistMenu({ songId, onClose }) {
 
 export default function Library({ view = 'all' }) {
   const { playlistId } = useParams();
-  const [songs, setSongs] = useState([]);
+  const [songs, setSongs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('skynet_songs') || '[]'); } catch { return []; }
+  });
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [search, setSearch] = useState('');
@@ -138,8 +140,14 @@ export default function Library({ view = 'all' }) {
     setLoading(true);
     try {
       const res = await fetch('/api/music');
-      setSongs(await res.json());
-    } finally { setLoading(false); }
+      const data = await res.json();
+      setSongs(data);
+      try { localStorage.setItem('skynet_songs', JSON.stringify(data)); } catch {}
+    } catch {
+      // Offline — keep whatever was restored from localStorage
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function scan() {
@@ -208,15 +216,26 @@ export default function Library({ view = 'all' }) {
         </div>
       </div>
 
-      <div className="relative mb-5 md:mb-6">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-        <input
-          type="text"
-          placeholder="Search…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-sm bg-zinc-800 text-white placeholder-zinc-500 rounded-full pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-white/20"
-        />
+      <div className="flex items-center gap-3 mb-5 md:mb-6 flex-wrap">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+          <input
+            type="text"
+            placeholder="Search…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full max-w-sm bg-zinc-800 text-white placeholder-zinc-500 rounded-full pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-white/20"
+          />
+        </div>
+        {search.trim() && (
+          <button
+            onClick={() => navigate(`/youtube?q=${encodeURIComponent(search.trim())}`)}
+            className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-red-400 transition-colors shrink-0"
+          >
+            <Youtube size={15} />
+            Search in YouTube
+          </button>
+        )}
       </div>
 
       {loading ? (

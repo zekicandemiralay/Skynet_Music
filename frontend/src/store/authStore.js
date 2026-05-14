@@ -1,7 +1,19 @@
 import { create } from 'zustand';
 
+const LS_KEY = 'skynet_user';
+
+function saveUser(user) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(user)); } catch {}
+}
+function clearUser() {
+  try { localStorage.removeItem(LS_KEY); } catch {}
+}
+function loadUser() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)); } catch { return null; }
+}
+
 const useAuthStore = create((set) => ({
-  user: null,    // { id, username, role }
+  user: null,
   loading: true,
 
   login: async (username, password) => {
@@ -15,11 +27,14 @@ const useAuthStore = create((set) => ({
       throw new Error(err.error || 'Login failed');
     }
     const data = await res.json();
-    set({ user: { id: data.id, username: data.username, role: data.role } });
+    const user = { id: data.id, username: data.username, role: data.role };
+    saveUser(user);
+    set({ user });
   },
 
   logout: async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    clearUser();
     set({ user: null });
   },
 
@@ -27,13 +42,17 @@ const useAuthStore = create((set) => ({
     try {
       const res = await fetch('/api/auth/me');
       if (res.ok) {
-        const user = await res.json();
-        set({ user: { id: user.id, username: user.username, role: user.role }, loading: false });
+        const data = await res.json();
+        const user = { id: data.id, username: data.username, role: data.role };
+        saveUser(user);
+        set({ user, loading: false });
       } else {
+        clearUser();
         set({ user: null, loading: false });
       }
     } catch {
-      set({ user: null, loading: false });
+      // Offline — restore the last known user so the app doesn't force a login
+      set({ user: loadUser(), loading: false });
     }
   },
 }));

@@ -7,7 +7,15 @@ function uuid() {
   });
 }
 
+function lsGet(key) {
+  try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
+}
+function lsSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+
 async function save(key, data) {
+  lsSet(`skynet_${key}`, data);
   await fetch(`/api/me/data/${key}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -31,9 +39,18 @@ const useUserDataStore = create((set, get) => ({
         load('liked_songs'),
         load('playlists'),
       ]);
-      set({ likedSongs: liked || [], playlists: playlists || [], loaded: true });
+      const likedSongs = liked || [];
+      const pls = playlists || [];
+      lsSet('skynet_liked_songs', likedSongs);
+      lsSet('skynet_playlists', pls);
+      set({ likedSongs, playlists: pls, loaded: true });
     } catch {
-      set({ likedSongs: [], playlists: [], loaded: true });
+      // Offline — restore from localStorage
+      set({
+        likedSongs: lsGet('skynet_liked_songs') || [],
+        playlists: lsGet('skynet_playlists') || [],
+        loaded: true,
+      });
     }
   },
 

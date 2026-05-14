@@ -71,7 +71,7 @@ function ChangePasswordModal({ onClose }) {
   );
 }
 
-function PlaylistItem({ playlist }) {
+function PlaylistItem({ playlist, onNavigate }) {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(playlist.name);
   const { renamePlaylist, deletePlaylist } = useUserDataStore();
@@ -99,6 +99,7 @@ function PlaylistItem({ playlist }) {
           className={({ isActive }) =>
             `flex-1 text-sm truncate transition-colors ${isActive ? 'text-white' : 'text-zinc-400 hover:text-white'}`
           }
+          onClick={onNavigate}
           onDoubleClick={() => setRenaming(true)}
         >
           {playlist.name}
@@ -152,7 +153,7 @@ export default function Sidebar({ onNavigate }) {
           <span className="text-white font-bold text-base">Skynet Music</span>
         </div>
         <nav className="space-y-0.5">
-          <NavLink to="/" end className={linkClass} onClick={onNavigate}>
+          <NavLink to="/library" className={linkClass} onClick={onNavigate}>
             <Library size={18} />
             Library
           </NavLink>
@@ -214,7 +215,7 @@ export default function Sidebar({ onNavigate }) {
           {playlists.length === 0 && !creating && (
             <p className="text-zinc-600 text-xs px-3 py-1">No playlists yet</p>
           )}
-          {playlists.map((p) => <PlaylistItem key={p.id} playlist={p} />)}
+          {playlists.map((p) => <PlaylistItem key={p.id} playlist={p} onNavigate={onNavigate} />)}
         </div>
       </div>
 

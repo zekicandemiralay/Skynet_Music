@@ -51,7 +51,8 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <Routes>
-                <Route path="/" element={<Library />} />
+                <Route path="/" element={<Navigate to="/liked" replace />} />
+                <Route path="/library" element={<Library />} />
                 <Route path="/liked" element={<Library view="liked" />} />
                 <Route path="/playlist/:playlistId" element={<Library view="playlist" />} />
                 <Route path="/youtube" element={<YouTube />} />
