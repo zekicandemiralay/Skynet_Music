@@ -324,52 +324,47 @@ export default function Library({ view = 'all' }) {
                 <span className="text-zinc-500 text-xs md:text-sm text-right self-center">{fmt(song.duration)}</span>
 
                 {/* Actions */}
-                <div className="flex items-center justify-end gap-0.5 md:gap-1 relative" onClick={(e) => e.stopPropagation()}>
-                  {/* Like button — always visible on mobile, hover-only on desktop */}
+                <div className="flex items-center justify-end gap-0.5 relative" onClick={(e) => e.stopPropagation()}>
+                  {/* Heart — always visible on mobile; on desktop visible if liked, hover-only otherwise */}
                   <button
                     onClick={() => toggleLike(song.id)}
-                    className={`p-2 md:p-1.5 transition-colors ${liked ? 'text-red-400' : 'text-zinc-500 hover:text-zinc-300 md:opacity-0 md:group-hover:opacity-100'}`}
+                    className={`p-2 md:p-1.5 transition-colors shrink-0 ${liked ? 'text-red-400' : 'text-zinc-600 hover:text-zinc-300 md:opacity-0 md:group-hover:opacity-100'}`}
                     title={liked ? 'Unlike' : 'Like'}
                   >
                     <Heart size={15} className={liked ? 'fill-current' : ''} />
                   </button>
 
-                  {/* Remove from playlist — desktop only */}
-                  {view === 'playlist' && currentPlaylist && (
-                    <button
-                      onClick={() => removeFromPlaylist(currentPlaylist.id, song.id)}
-                      className="hidden md:block p-1.5 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                      title="Remove from playlist"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-
-                  {/* Add to playlist — desktop only */}
-                  <div className="relative hidden md:block">
-                    <button
-                      onClick={() => setMenuOpen(menuOpen === song.id ? null : song.id)}
-                      className="p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
-                      title="Add to playlist"
-                    >
-                      <ListPlus size={14} />
-                    </button>
-                    {menuOpen === song.id && (
-                      <AddToPlaylistMenu
-                        songId={song.id}
-                        onClose={() => setMenuOpen(null)}
-                      />
+                  {/* Extra actions — desktop hover only; hidden by default so they take NO layout space */}
+                  <div className="hidden md:group-hover:flex items-center gap-0.5">
+                    {view === 'playlist' && currentPlaylist && (
+                      <button
+                        onClick={() => removeFromPlaylist(currentPlaylist.id, song.id)}
+                        className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors"
+                        title="Remove from playlist"
+                      >
+                        <X size={14} />
+                      </button>
                     )}
+                    <div className="relative">
+                      <button
+                        onClick={() => setMenuOpen(menuOpen === song.id ? null : song.id)}
+                        className="p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors"
+                        title="Add to playlist"
+                      >
+                        <ListPlus size={14} />
+                      </button>
+                      {menuOpen === song.id && (
+                        <AddToPlaylistMenu songId={song.id} onClose={() => setMenuOpen(null)} />
+                      )}
+                    </div>
+                    <button
+                      className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors"
+                      title="Find on YouTube"
+                      onClick={() => navigate(`/youtube?q=${encodeURIComponent(`${song.artist} ${song.title}`)}`)}
+                    >
+                      <Youtube size={14} />
+                    </button>
                   </div>
-
-                  {/* Find on YouTube — desktop only */}
-                  <button
-                    className="hidden md:block p-1.5 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                    title="Find on YouTube"
-                    onClick={() => navigate(`/youtube?q=${encodeURIComponent(`${song.artist} ${song.title}`)}`)}
-                  >
-                    <Youtube size={14} />
-                  </button>
                 </div>
               </div>
             );

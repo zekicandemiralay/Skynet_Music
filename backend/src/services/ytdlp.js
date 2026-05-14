@@ -54,6 +54,9 @@ function downloadAudio(videoId, outputDir, onProgress) {
       '-x',
       '--audio-format', 'mp3',
       '--audio-quality', '0',
+      '--embed-metadata',       // write ID3 tags (title, artist, album where available)
+      '--embed-thumbnail',      // embed thumbnail as album art
+      '--parse-metadata', 'title:%(artist)s - %(title)s', // extract artist from "Artist - Title" format
       '--newline',
       '-o', `${outputDir}/%(uploader)s - %(title)s.%(ext)s`,
       '--no-playlist',

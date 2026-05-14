@@ -24,33 +24,56 @@ async function scanFile(filepath) {
   const db = getDb();
   try {
     const existing = db.prepare('SELECT * FROM songs WHERE filepath = ?').get(filepath);
-    if (existing) return existing;
+
+    // Skip re-scan only if metadata is already complete
+    const needsRescan = !existing ||
+      existing.artist === 'Unknown Artist' ||
+      existing.album === 'Unknown Album' ||
+      !existing.has_cover;
+
+    if (!needsRescan) return existing;
 
     const meta = await mm.parseFile(filepath, { duration: true, skipCovers: false });
     const { common, format } = meta;
     const hasCover = !!(common.picture && common.picture.length > 0);
 
     const song = {
-      id: uuidv4(),
+      id: existing?.id || uuidv4(),
       filename: path.basename(filepath),
       filepath,
       title: common.title || path.basename(filepath, path.extname(filepath)),
-      artist: common.artist || 'Unknown Artist',
-      album: common.album || 'Unknown Album',
-      duration: format.duration || 0,
-      track: common.track?.no || 0,
-      year: common.year || null,
+      artist: common.artist || null,
+      album: common.album || null,
+      duration: format.duration || existing?.duration || 0,
+      track: common.track?.no || existing?.track || 0,
+      year: common.year || existing?.year || null,
       has_cover: hasCover ? 1 : 0,
     };
 
-    db.prepare(`
-      INSERT OR IGNORE INTO songs
-        (id, filename, filepath, title, artist, album, duration, track, year, has_cover)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      song.id, song.filename, song.filepath, song.title, song.artist,
-      song.album, song.duration, song.track, song.year, song.has_cover
-    );
+    // Merge: don't overwrite known-good fields with unknowns
+    if (!song.artist && existing?.artist && existing.artist !== 'Unknown Artist') {
+      song.artist = existing.artist;
+    }
+    if (!song.album && existing?.album && existing.album !== 'Unknown Album') {
+      song.album = existing.album;
+    }
+    song.artist = song.artist || 'Unknown Artist';
+    song.album = song.album || 'Unknown Album';
+
+    if (!existing) {
+      db.prepare(`
+        INSERT OR IGNORE INTO songs
+          (id, filename, filepath, title, artist, album, duration, track, year, has_cover)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(song.id, song.filename, song.filepath, song.title, song.artist,
+             song.album, song.duration, song.track, song.year, song.has_cover);
+    } else {
+      db.prepare(`
+        UPDATE songs SET title=?, artist=?, album=?, duration=?, track=?, year=?, has_cover=?
+        WHERE id=?
+      `).run(song.title, song.artist, song.album, song.duration,
+             song.track, song.year, song.has_cover, song.id);
+    }
 
     return song;
   } catch (err) {
