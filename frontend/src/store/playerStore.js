@@ -197,6 +197,10 @@ if ('mediaSession' in navigator) {
   });
   navigator.mediaSession.setActionHandler('nexttrack', () => usePlayerStore.getState().next());
   navigator.mediaSession.setActionHandler('previoustrack', () => usePlayerStore.getState().prev());
+  // Explicitly disable 10-second skip buttons — iOS shows these by default when
+  // setPositionState() is active; setting them to null forces prev/next track instead.
+  navigator.mediaSession.setActionHandler('seekbackward', null);
+  navigator.mediaSession.setActionHandler('seekforward', null);
   navigator.mediaSession.setActionHandler('seekto', (d) => {
     if (d.seekTime !== undefined) {
       audio.currentTime = d.seekTime;
