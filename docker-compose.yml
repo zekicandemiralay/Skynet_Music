@@ -13,7 +13,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:-insecure-default-change-in-production}
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
-      - SECURE_COOKIE=${SECURE_COOKIE:-false}
+      - SECURE_COOKIE=${SECURE_COOKIE:-true}
     restart: unless-stopped
     networks:
       - app-network
@@ -23,7 +23,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "${APP_PORT:-4000}:80"
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      - SERVER_IP=${SERVER_IP:-127.0.0.1}
+    volumes:
+      - ssl_certs:/etc/nginx/ssl
     depends_on:
       - backend
     restart: unless-stopped
@@ -36,3 +41,4 @@ networks:
 
 volumes:
   db_data:
+  ssl_certs:
