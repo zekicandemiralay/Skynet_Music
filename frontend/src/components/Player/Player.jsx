@@ -88,6 +88,7 @@ function NowPlayingExpanded({ onClose }) {
   const [snapping, setSnapping] = useState(false);
   const startY = useRef(0);
   const dragging = useRef(false);
+  const entered = useRef(false);
 
   const onTouchStart = (e) => {
     if (e.target.tagName === 'INPUT') return;
@@ -105,7 +106,7 @@ function NowPlayingExpanded({ onClose }) {
     dragging.current = false;
     if (dragY > 80) {
       onClose();
-    } else {
+    } else if (dragY > 0) {
       setSnapping(true);
       setDragY(0);
       setTimeout(() => setSnapping(false), 280);
@@ -115,13 +116,15 @@ function NowPlayingExpanded({ onClose }) {
   const panelStyle = (() => {
     if (dragY > 0) return { zIndex: 200, transform: `translateY(${dragY}px)` };
     if (snapping) return { zIndex: 200, transform: 'translateY(0)', transition: 'transform 0.25s ease-out' };
-    return { zIndex: 200, animation: 'slideUp 0.3s ease-out forwards' };
+    if (!entered.current) return { zIndex: 200, animation: 'slideUp 0.3s ease-out forwards' };
+    return { zIndex: 200 };
   })();
 
   return (
     <div
       className="fixed inset-0 bg-zinc-950 flex flex-col"
       style={panelStyle}
+      onAnimationEnd={() => { entered.current = true; }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
