@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import usePlayerStore from '../../store/playerStore';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Shuffle, ChevronDown } from 'lucide-react';
+import useUserDataStore from '../../store/userDataStore';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Shuffle, ChevronDown, Heart, ListPlus } from 'lucide-react';
 
 function fmt(s) {
   if (!s || isNaN(s)) return '0:00';
@@ -76,14 +77,66 @@ function Cover({ song, className = '' }) {
   );
 }
 
+function AddToPlaylistMenu({ songId, onClose, upward = false }) {
+  const { playlists, addToPlaylist, createPlaylist } = useUserDataStore();
+  const [newName, setNewName] = useState('');
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handler(e) { if (ref.current && !ref.current.contains(e.target)) onClose(); }
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('touchstart', handler); };
+  }, [onClose]);
+
+  async function handleAdd(playlistId) { await addToPlaylist(playlistId, songId); onClose(); }
+  async function handleCreate() {
+    const name = newName.trim();
+    if (!name) return;
+    const p = await createPlaylist(name);
+    if (p) await addToPlaylist(p.id, songId);
+    onClose();
+  }
+
+  return (
+    <div
+      ref={ref}
+      className={`absolute right-0 z-50 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl w-52 py-1 overflow-hidden ${upward ? 'bottom-full mb-2' : 'top-full mt-2'}`}
+    >
+      <p className="text-zinc-500 text-xs px-3 py-1.5 font-semibold uppercase tracking-wider">Add to playlist</p>
+      {playlists.length === 0 && <p className="text-zinc-600 text-xs px-3 py-1.5">No playlists yet</p>}
+      {playlists.map((p) => (
+        <button key={p.id} onClick={() => handleAdd(p.id)}
+          className="w-full text-left text-zinc-300 hover:text-white hover:bg-zinc-700 text-sm px-3 py-2 transition-colors truncate block">
+          {p.name}
+        </button>
+      ))}
+      <div className="border-t border-zinc-700 mt-1 pt-1">
+        <div className="flex items-center gap-1 px-2 py-1">
+          <input
+            type="text" placeholder="New playlist…" value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
+            className="flex-1 bg-zinc-700 text-white text-xs rounded px-2 py-1.5 focus:outline-none placeholder-zinc-500 min-w-0"
+          />
+          <button onClick={handleCreate} className="text-zinc-400 hover:text-white text-xs px-1.5 py-1.5">+</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NowPlayingExpanded({ onClose }) {
   const {
     currentSong, isPlaying, currentTime, duration, shuffle,
     pause, resume, next, prev, seek, toggleShuffle,
   } = usePlayerStore();
+  const { likedSongs, toggleLike } = useUserDataStore();
+  const liked = currentSong ? likedSongs.includes(currentSong.id) : false;
 
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  const [showMenu, setShowMenu] = useState(false);
   const [dragY, setDragY] = useState(0);
   const [snapping, setSnapping] = useState(false);
   const startY = useRef(0);
@@ -182,9 +235,14 @@ function NowPlayingExpanded({ onClose }) {
         </div>
 
         <div className="flex items-center justify-between pt-1">
-          <button onClick={toggleShuffle} className={`p-2 transition-colors ${shuffle ? 'text-green-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
-            <Shuffle size={22} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={toggleShuffle} className={`p-2 transition-colors ${shuffle ? 'text-green-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
+              <Shuffle size={22} />
+            </button>
+            <button onClick={() => currentSong && toggleLike(currentSong.id)} className={`p-2 transition-colors ${liked ? 'text-red-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
+              <Heart size={22} className={liked ? 'fill-current' : ''} />
+            </button>
+          </div>
           <button onClick={prev} disabled={!currentSong} className="p-2 text-zinc-300 hover:text-white disabled:opacity-30">
             <SkipBack size={32} className="fill-current" />
           </button>
@@ -198,7 +256,12 @@ function NowPlayingExpanded({ onClose }) {
           <button onClick={next} disabled={!currentSong} className="p-2 text-zinc-300 hover:text-white disabled:opacity-30">
             <SkipForward size={32} className="fill-current" />
           </button>
-          <div className="w-10" />
+          <div className="relative">
+            <button onClick={() => currentSong && setShowMenu((v) => !v)} className={`p-2 transition-colors ${showMenu ? 'text-white' : 'text-zinc-600 hover:text-zinc-400'}`}>
+              <ListPlus size={22} />
+            </button>
+            {showMenu && currentSong && <AddToPlaylistMenu songId={currentSong.id} onClose={() => setShowMenu(false)} upward />}
+          </div>
         </div>
       </div>
     </div>
@@ -210,8 +273,11 @@ export default function Player() {
     currentSong, isPlaying, currentTime, duration, volume, shuffle,
     pause, resume, next, prev, seek, setVolume, toggleShuffle,
   } = usePlayerStore();
+  const { likedSongs, toggleLike } = useUserDataStore();
+  const liked = currentSong ? likedSongs.includes(currentSong.id) : false;
 
   const [expanded, setExpanded] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   const openExpanded = () => { if (currentSong) setExpanded(true); };
   const closeExpanded = () => setExpanded(false);
@@ -250,9 +316,23 @@ export default function Player() {
             <p className="text-sm text-zinc-400 truncate">{currentSong?.artist ?? ''}</p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <button onClick={sp(prev)} disabled={!currentSong} className="p-2 text-zinc-400 hover:text-white disabled:opacity-30">
-              <SkipBack size={20} />
+            <button
+              onClick={sp(() => currentSong && toggleLike(currentSong.id))}
+              disabled={!currentSong}
+              className={`p-2 transition-colors disabled:opacity-30 ${liked ? 'text-red-400' : 'text-zinc-500 hover:text-white'}`}
+            >
+              <Heart size={18} className={liked ? 'fill-current' : ''} />
             </button>
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => currentSong && setShowMenu((v) => !v)}
+                disabled={!currentSong}
+                className={`p-2 transition-colors disabled:opacity-30 ${showMenu ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
+              >
+                <ListPlus size={18} />
+              </button>
+              {showMenu && currentSong && <AddToPlaylistMenu songId={currentSong.id} onClose={() => setShowMenu(false)} upward />}
+            </div>
             <button
               onClick={sp(isPlaying ? pause : resume)}
               disabled={!currentSong}
@@ -269,17 +349,36 @@ export default function Player() {
         {/* ── Desktop player ── */}
         <div className="hidden md:flex items-center px-4 h-24 gap-6">
 
-          {/* Song info — left section, no fixed width so it can grow */}
-          <div className="flex items-center gap-3 min-w-0 w-1/4">
+          {/* Song info + actions — left section */}
+          <div className="flex items-center gap-3 min-w-0 w-1/3">
             <Cover song={currentSong} className="w-14 h-14 rounded shrink-0" />
             {currentSong ? (
-              <div className="min-w-0 overflow-hidden flex items-center gap-2">
-                <EqBars isPlaying={isPlaying} />
-                <div className="min-w-0 overflow-hidden">
-                  <p className="text-green-400 text-base font-semibold truncate">{currentSong.title}</p>
-                  <p className="text-zinc-400 text-sm truncate">{currentSong.artist}</p>
+              <>
+                <div className="min-w-0 overflow-hidden flex items-center gap-2 flex-1">
+                  <EqBars isPlaying={isPlaying} />
+                  <div className="min-w-0 overflow-hidden">
+                    <p className="text-green-400 text-base font-semibold truncate">{currentSong.title}</p>
+                    <p className="text-zinc-400 text-sm truncate">{currentSong.artist}</p>
+                  </div>
                 </div>
-              </div>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    onClick={sp(() => toggleLike(currentSong.id))}
+                    className={`p-1.5 transition-colors ${liked ? 'text-red-400' : 'text-zinc-600 hover:text-zinc-300'}`}
+                  >
+                    <Heart size={15} className={liked ? 'fill-current' : ''} />
+                  </button>
+                  <div className="relative" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setShowMenu((v) => !v)}
+                      className={`p-1.5 transition-colors ${showMenu ? 'text-white' : 'text-zinc-600 hover:text-zinc-300'}`}
+                    >
+                      <ListPlus size={15} />
+                    </button>
+                    {showMenu && <AddToPlaylistMenu songId={currentSong.id} onClose={() => setShowMenu(false)} upward />}
+                  </div>
+                </div>
+              </>
             ) : (
               <p className="text-zinc-600 text-sm">Nothing playing</p>
             )}
