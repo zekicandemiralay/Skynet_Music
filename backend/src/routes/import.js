@@ -5,7 +5,7 @@ const AdmZip = require('adm-zip');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { requireAuth } = require('../middleware/auth');
-const { downloadBySearch } = require('../services/ytdlp');
+const { downloadBySearch, downloadAudio } = require('../services/ytdlp');
 const { scanFile } = require('../services/scanner');
 const { getDb } = require('../db');
 
@@ -118,11 +118,19 @@ async function runImport(userId, playlists) {
     const playlistId = playlistIds[playlist.playlistName];
 
     for (const track of playlist.tracks) {
-      const query = track.artist ? `${track.artist} - ${track.name}` : track.name;
-      job.currentTrack = query;
+      const label = track.videoId
+        ? track.name
+        : (track.artist ? `${track.artist} - ${track.name}` : track.name);
+      job.currentTrack = label;
 
       try {
-        const filepath = await downloadBySearch(query, MUSIC_DIR(), () => {});
+        let filepath;
+        if (track.videoId) {
+          filepath = await downloadAudio(track.videoId, MUSIC_DIR(), () => {});
+        } else {
+          const query = track.artist ? `${track.artist} - ${track.name}` : track.name;
+          filepath = await downloadBySearch(query, MUSIC_DIR(), () => {});
+        }
         if (filepath) {
           const song = await scanFile(filepath);
           if (song) {
@@ -141,7 +149,7 @@ async function runImport(userId, playlists) {
           }
         }
       } catch (err) {
-        job.errors.push({ track: query, error: err.message });
+        job.errors.push({ track: label, error: err.message });
       }
 
       job.done++;
@@ -152,6 +160,45 @@ async function runImport(userId, playlists) {
   job.status = 'done';
   job.currentTrack = null;
   job.currentPlaylist = null;
+}
+
+// Parse a single Google Takeout playlist JSON buffer
+function takeoutJsonToPlaylist(entryName, buffer) {
+  try {
+    const data = JSON.parse(buffer.toString('utf8'));
+    if (!data.playlistItems || !Array.isArray(data.playlistItems)) return null;
+    const name = data.snippet?.title || playlistNameFromFilename(entryName);
+    const tracks = data.playlistItems
+      .filter(item => item.contentDetails?.videoId)
+      .map(item => ({
+        name: item.snippet?.title || item.contentDetails.videoId,
+        videoId: item.contentDetails.videoId,
+      }));
+    return tracks.length > 0 ? { playlistName: name, tracks } : null;
+  } catch {
+    return null;
+  }
+}
+
+// Accepts: a Google Takeout ZIP, or individual playlist JSON files
+function parseYouTubeTakeout(files) {
+  const playlists = [];
+  for (const file of files) {
+    const name = file.originalname;
+    if (name.toLowerCase().endsWith('.zip')) {
+      const zip = new AdmZip(file.buffer);
+      for (const entry of zip.getEntries()) {
+        if (!entry.isDirectory && entry.name.toLowerCase().endsWith('.json')) {
+          const pl = takeoutJsonToPlaylist(entry.name, entry.getData());
+          if (pl) playlists.push(pl);
+        }
+      }
+    } else if (name.toLowerCase().endsWith('.json')) {
+      const pl = takeoutJsonToPlaylist(name, file.buffer);
+      if (pl) playlists.push(pl);
+    }
+  }
+  return playlists;
 }
 
 router.use(requireAuth);
@@ -177,6 +224,51 @@ router.post('/spotify', upload.array('files', 50), async (req, res) => {
 
   if (!playlists.length) {
     return res.status(400).json({ error: 'No tracks found in the uploaded files' });
+  }
+
+  const job = {
+    status: 'running',
+    done: 0,
+    total: 0,
+    currentTrack: null,
+    currentPlaylist: null,
+    playlists: playlists.map(p => p.playlistName),
+    errors: [],
+  };
+  importJobs.set(req.user.id, job);
+
+  runImport(req.user.id, playlists).catch(err => {
+    const j = importJobs.get(req.user.id);
+    if (j) { j.status = 'error'; j.errorMessage = err.message; }
+  });
+
+  res.json({
+    ok: true,
+    playlists: playlists.map(p => ({ name: p.playlistName, tracks: p.tracks.length })),
+  });
+});
+
+router.post('/youtube', upload.array('files', 50), async (req, res) => {
+  const files = req.files;
+  if (!files || files.length === 0) return res.status(400).json({ error: 'No files uploaded' });
+
+  const invalid = files.find(f => !f.originalname.toLowerCase().match(/\.(zip|json)$/));
+  if (invalid) return res.status(400).json({ error: 'Only .zip and .json files are accepted' });
+
+  const existing = importJobs.get(req.user.id);
+  if (existing && existing.status === 'running') {
+    return res.status(409).json({ error: 'An import is already running' });
+  }
+
+  let playlists;
+  try {
+    playlists = parseYouTubeTakeout(files);
+  } catch (err) {
+    return res.status(400).json({ error: `Failed to parse files: ${err.message}` });
+  }
+
+  if (!playlists.length) {
+    return res.status(400).json({ error: 'No tracks found — make sure this is a Google Takeout YouTube export' });
   }
 
   const job = {
