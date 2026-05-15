@@ -48,6 +48,10 @@ function smartShuffle(songs) {
 const audio = new Audio();
 audio.preload = 'metadata';
 
+// iOS shows seek buttons whenever setPositionState is called — skip it on iOS
+// so the lock screen always shows prev/next track buttons instead.
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
 // Tracks accumulated real-time seconds for the current song
 let playTrack = { songId: null, accumulated: 0, resumeAt: null };
 
@@ -161,7 +165,7 @@ const usePlayerStore = create((set, get) => ({
 audio.addEventListener('timeupdate', () => {
   const t = audio.currentTime;
   usePlayerStore.setState({ currentTime: t });
-  if ('mediaSession' in navigator && !isNaN(audio.duration) && audio.duration > 0) {
+  if (!isIOS && 'mediaSession' in navigator && !isNaN(audio.duration) && audio.duration > 0) {
     try {
       navigator.mediaSession.setPositionState({
         duration: audio.duration,
@@ -218,5 +222,52 @@ if ('mediaSession' in navigator) {
     }
   });
 }
+
+// ── Persist / restore last-played song ───────────────────────────────────────
+
+function saveState() {
+  const { currentSong, currentTime } = usePlayerStore.getState();
+  if (!currentSong) return;
+  try {
+    localStorage.setItem('skynet_player_state', JSON.stringify({
+      song: currentSong,
+      time: Math.floor(currentTime),
+    }));
+  } catch {}
+}
+
+// Save on song change immediately; throttle time saves to every 5 s
+let saveTimer = null;
+let lastSavedTime = 0;
+usePlayerStore.subscribe((state, prev) => {
+  if (state.currentSong?.id !== prev.currentSong?.id) { saveState(); return; }
+  if (Math.abs(state.currentTime - lastSavedTime) >= 5) {
+    lastSavedTime = state.currentTime;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveState, 500);
+  }
+});
+
+// Restore on page load — show last song in bar, don't auto-play
+try {
+  const saved = JSON.parse(localStorage.getItem('skynet_player_state') || 'null');
+  if (saved?.song) {
+    usePlayerStore.setState({
+      currentSong: saved.song,
+      queue: [saved.song],
+      queueIndex: 0,
+      currentTime: saved.time || 0,
+      isPlaying: false,
+    });
+    audio.src = `/api/music/${saved.song.id}/stream`;
+    if (saved.time > 0) {
+      audio.addEventListener('loadedmetadata', function onMeta() {
+        audio.currentTime = saved.time;
+        audio.removeEventListener('loadedmetadata', onMeta);
+      });
+    }
+    applyMediaSessionMeta(saved.song);
+  }
+} catch {}
 
 export default usePlayerStore;
