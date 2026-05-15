@@ -1,0 +1,253 @@
+import { useState, useEffect, useRef } from 'react';
+import { Upload, CheckCircle, AlertCircle, Loader2, X, Music } from 'lucide-react';
+
+export default function Import() {
+  const [files, setFiles] = useState([]);
+  const [dragging, setDragging] = useState(false);
+  const [job, setJob] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const pollRef = useRef(null);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    fetch('/api/import/status').then(r => r.json()).then(data => {
+      if (data) setJob(data);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (job?.status === 'running') {
+      pollRef.current = setInterval(async () => {
+        try {
+          const res = await fetch('/api/import/status');
+          const data = await res.json();
+          if (data) setJob(data);
+          if (data?.status !== 'running') clearInterval(pollRef.current);
+        } catch {}
+      }, 2000);
+    }
+    return () => clearInterval(pollRef.current);
+  }, [job?.status]);
+
+  function addFiles(incoming) {
+    const valid = Array.from(incoming).filter(f =>
+      f.name.toLowerCase().endsWith('.zip') || f.name.toLowerCase().endsWith('.csv')
+    );
+    if (valid.length !== incoming.length) setError('Only .zip and .csv files are accepted');
+    else setError('');
+    setFiles(prev => {
+      const names = new Set(prev.map(f => f.name));
+      return [...prev, ...valid.filter(f => !names.has(f.name))];
+    });
+  }
+
+  function removeFile(name) {
+    setFiles(prev => prev.filter(f => f.name !== name));
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragging(false);
+    addFiles(e.dataTransfer.files);
+  }
+
+  async function handleUpload() {
+    if (files.length === 0) return;
+    setUploading(true);
+    setError('');
+    const form = new FormData();
+    for (const f of files) form.append('files', f);
+    try {
+      const res = await fetch('/api/import/spotify', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Upload failed'); setUploading(false); return; }
+      setJob({
+        status: 'running',
+        done: 0,
+        total: data.playlists.reduce((s, p) => s + p.tracks, 0),
+        playlists: data.playlists.map(p => p.name),
+        currentTrack: null,
+        currentPlaylist: null,
+        errors: [],
+      });
+      setFiles([]);
+    } catch {
+      setError('Upload failed — check your connection');
+    }
+    setUploading(false);
+  }
+
+  async function clearJob() {
+    await fetch('/api/import/status', { method: 'DELETE' });
+    setJob(null);
+  }
+
+  const pct = job?.total > 0 ? Math.round((job.done / job.total) * 100) : 0;
+
+  return (
+    <div className="p-6 max-w-2xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white mb-1">Import from Spotify</h1>
+        <p className="text-zinc-400 text-sm">
+          Export your Spotify playlists with{' '}
+          <a
+            href="https://exportify.net"
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-400 hover:underline"
+          >
+            Exportify
+          </a>
+          , then upload the ZIP or individual CSV files here. Each playlist will be downloaded from YouTube Music and added to your library.
+        </p>
+      </div>
+
+      <div className="bg-zinc-900 rounded-xl p-4 space-y-2">
+        <p className="text-zinc-300 text-sm font-medium">How to export from Spotify:</p>
+        <ol className="text-zinc-400 text-sm space-y-1 list-decimal list-inside">
+          <li>Go to <span className="text-zinc-200">exportify.net</span> and log in with Spotify</li>
+          <li>Click <span className="text-zinc-200">"Export All"</span> to get all playlists as a ZIP — or export individual playlists as CSVs</li>
+          <li>Upload the ZIP, or select multiple CSV files, below</li>
+        </ol>
+      </div>
+
+      {!job && (
+        <div className="space-y-3">
+          <div
+            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+              dragging ? 'border-blue-400 bg-blue-400/5' : 'border-zinc-700 hover:border-zinc-500'
+            }`}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => fileRef.current?.click()}
+          >
+            <Upload size={28} className="mx-auto mb-3 text-zinc-500" />
+            <p className="text-zinc-300 font-medium">Drop files here</p>
+            <p className="text-zinc-500 text-sm mt-1">ZIP (all playlists) or individual CSV files — click to browse</p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".zip,.csv"
+              multiple
+              className="hidden"
+              onChange={(e) => addFiles(e.target.files)}
+            />
+          </div>
+
+          {files.length > 0 && (
+            <div className="bg-zinc-900 rounded-xl divide-y divide-zinc-800">
+              {files.map(f => (
+                <div key={f.name} className="flex items-center gap-3 px-4 py-2.5">
+                  <Music size={15} className="text-zinc-500 shrink-0" />
+                  <span className="flex-1 text-sm text-zinc-200 truncate">{f.name}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeFile(f.name); }}
+                    className="text-zinc-600 hover:text-zinc-300 shrink-0"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {error && <p className="text-red-400 text-sm">{error}</p>}
+
+          <button
+            onClick={handleUpload}
+            disabled={files.length === 0 || uploading}
+            className="w-full bg-white text-black rounded-xl py-3 font-medium text-sm hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {uploading && <Loader2 size={16} className="animate-spin" />}
+            {uploading ? 'Starting import…' : `Start Import${files.length > 1 ? ` (${files.length} files)` : ''}`}
+          </button>
+        </div>
+      )}
+
+      {job && (
+        <div className="bg-zinc-900 rounded-xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {job.status === 'running' && <Loader2 size={18} className="animate-spin text-blue-400" />}
+              {job.status === 'done' && <CheckCircle size={18} className="text-green-400" />}
+              {job.status === 'error' && <AlertCircle size={18} className="text-red-400" />}
+              <span className="text-white font-medium">
+                {job.status === 'running' && 'Importing…'}
+                {job.status === 'done' && 'Import complete'}
+                {job.status === 'error' && 'Import failed'}
+              </span>
+            </div>
+            {job.status !== 'running' && (
+              <button onClick={clearJob} className="text-zinc-500 hover:text-white">
+                <X size={16} />
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs text-zinc-500">
+              <span>{job.done} / {job.total} tracks</span>
+              <span>{pct}%</span>
+            </div>
+            <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+
+          {job.currentTrack && (
+            <p className="text-zinc-400 text-sm truncate">
+              Downloading: <span className="text-zinc-200">{job.currentTrack}</span>
+            </p>
+          )}
+
+          {job.playlists?.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-zinc-500 text-xs uppercase tracking-wider font-semibold">Playlists</p>
+              {job.playlists.map(name => (
+                <div key={name} className="flex items-center gap-2 text-sm">
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 transition-colors ${
+                      job.currentPlaylist === name
+                        ? 'bg-blue-400'
+                        : 'bg-zinc-600'
+                    }`}
+                  />
+                  <span className={job.currentPlaylist === name ? 'text-white' : 'text-zinc-400'}>
+                    {name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {job.errors?.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-zinc-500 text-xs uppercase tracking-wider font-semibold">
+                {job.errors.length} track{job.errors.length !== 1 ? 's' : ''} failed
+              </p>
+              <div className="max-h-28 overflow-y-auto space-y-0.5">
+                {job.errors.map((e, i) => (
+                  <p key={i} className="text-red-400 text-xs truncate">{e.track}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {job.status === 'done' && (
+            <button
+              onClick={clearJob}
+              className="w-full bg-zinc-800 text-white rounded-lg py-2.5 text-sm hover:bg-zinc-700 transition-colors"
+            >
+              Import another file
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

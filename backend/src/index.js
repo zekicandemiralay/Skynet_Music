@@ -11,6 +11,7 @@ const statsRoutes = require('./routes/stats');
 const mixesRoutes = require('./routes/mixes');
 const homeRoutes = require('./routes/home');
 const featuredRoutes = require('./routes/featured');
+const importRoutes = require('./routes/import');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -34,6 +35,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/mixes', mixesRoutes);
 app.use('/api/home', homeRoutes);
 app.use('/api/featured', featuredRoutes);
+app.use('/api/import', importRoutes);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Backend running on port ${PORT}`);

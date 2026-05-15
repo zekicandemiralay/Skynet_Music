@@ -88,4 +88,46 @@ function downloadAudio(videoId, outputDir, onProgress) {
   });
 }
 
-module.exports = { searchYoutube, downloadAudio };
+function downloadBySearch(query, outputDir, onProgress) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('yt-dlp', [
+      `ytmsearch1:${query}`,
+      '-x',
+      '--audio-format', 'mp3',
+      '--audio-quality', '0',
+      '--embed-metadata',
+      '--embed-thumbnail',
+      '--parse-metadata', 'title:%(artist)s - %(title)s',
+      '--newline',
+      '-o', `${outputDir}/%(uploader)s - %(title)s.%(ext)s`,
+      '--no-playlist',
+    ]);
+
+    let lastFile = '';
+    let errorOut = '';
+
+    proc.stdout.on('data', (chunk) => {
+      for (const line of chunk.toString().split('\n')) {
+        const pct = line.match(/\[download\]\s+([\d.]+)%/);
+        if (pct) onProgress(parseFloat(pct[1]));
+
+        const dest = line.match(/\[(?:ExtractAudio|download)\] Destination: (.+)/);
+        if (dest) lastFile = dest[1].trim();
+
+        const already = line.match(/\[download\] (.+) has already been downloaded/);
+        if (already) { lastFile = already[1].trim(); onProgress(100); }
+      }
+    });
+
+    proc.stderr.on('data', (c) => { errorOut += c.toString(); });
+
+    proc.on('close', (code) => {
+      if (code !== 0) reject(new Error(`Download failed: ${errorOut.slice(0, 300)}`));
+      else resolve(lastFile || null);
+    });
+
+    proc.on('error', reject);
+  });
+}
+
+module.exports = { searchYoutube, downloadAudio, downloadBySearch };

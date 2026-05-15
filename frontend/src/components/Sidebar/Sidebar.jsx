@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Music2, Youtube, Library, Heart, ListMusic, Plus, ShieldCheck, LogOut, Trash2, Check, KeyRound, X, BarChart2, Sparkles, Clock, Mic2, Music, Home } from 'lucide-react';
+import { Music2, Youtube, Library, Heart, ListMusic, Plus, ShieldCheck, LogOut, Trash2, Check, KeyRound, X, BarChart2, Sparkles, Clock, Mic2, Music, Home, Download } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import useUserDataStore from '../../store/userDataStore';
 import useMixStore from '../../store/useMixStore';
@@ -186,6 +186,10 @@ export default function Sidebar({ onNavigate }) {
           <NavLink to="/stats" className={linkClass} onClick={onNavigate}>
             <BarChart2 size={18} className="text-blue-400" />
             Stats
+          </NavLink>
+          <NavLink to="/import" className={linkClass} onClick={onNavigate}>
+            <Download size={18} className="text-green-400" />
+            Import Spotify
           </NavLink>
           {user?.role === 'admin' && (
             <NavLink to="/admin" className={linkClass} onClick={onNavigate}>
