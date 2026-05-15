@@ -84,6 +84,14 @@ function parseUploadedFiles(files) {
   return playlists.filter(p => p.tracks.length > 0);
 }
 
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Download timed out after 5 minutes')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function runImport(userId, playlists) {
   const job = importJobs.get(userId);
   const db = getDb();
@@ -126,10 +134,10 @@ async function runImport(userId, playlists) {
       try {
         let filepath;
         if (track.videoId) {
-          filepath = await downloadAudio(track.videoId, MUSIC_DIR(), () => {});
+          filepath = await withTimeout(downloadAudio(track.videoId, MUSIC_DIR(), () => {}), 5 * 60 * 1000);
         } else {
           const query = track.artist ? `${track.artist} - ${track.name}` : track.name;
-          filepath = await downloadBySearch(query, MUSIC_DIR(), () => {});
+          filepath = await withTimeout(downloadBySearch(query, MUSIC_DIR(), () => {}), 5 * 60 * 1000);
         }
         if (filepath) {
           const song = await scanFile(filepath);
@@ -153,7 +161,7 @@ async function runImport(userId, playlists) {
       }
 
       job.done++;
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 3000));
     }
   }
 
