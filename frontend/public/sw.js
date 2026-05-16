@@ -1,4 +1,4 @@
-const CACHE = 'skynet-v5';
+const CACHE = '__SW_VERSION__';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(self.skipWaiting());
