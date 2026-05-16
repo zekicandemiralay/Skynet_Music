@@ -1,24 +1,50 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+function collectAssets(dir, urlBase = '') {
+  const urls = [];
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const rel = urlBase + '/' + entry.name;
+      if (entry.isDirectory()) {
+        urls.push(...collectAssets(join(dir, entry.name), rel));
+      } else if (!rel.endsWith('/sw.js') && !rel.endsWith('.html')) {
+        urls.push(rel);
+      }
+    }
+  } catch {}
+  return urls;
+}
+
 export default defineConfig({
   plugins: [
     react(),
     {
-      // Stamp sw.js with the build time so the service worker cache is always
-      // fresh after a deployment — prevents stale offline app shell on phones.
+      // At build time:
+      //   1. Collect every asset Vite emitted (JS, CSS, fonts, icons…)
+      //   2. Prepend self.__PRECACHE_MANIFEST__ = [...] to sw.js
+      //   3. Stamp __SW_VERSION__ with the build timestamp
+      //
+      // Result: the service worker pre-caches the full app shell on install
+      // so offline works immediately after any deployment — no manual bumping.
       name: 'sw-version',
       closeBundle() {
-        const swPath = join(__dirname, 'dist', 'sw.js');
+        const distDir = join(__dirname, 'dist');
+        const swPath = join(distDir, 'sw.js');
         try {
-          const sw = readFileSync(swPath, 'utf8');
-          writeFileSync(swPath, sw.replace('__SW_VERSION__', `skynet-${Date.now()}`));
-        } catch {}
+          const assets = collectAssets(distDir);
+          const manifest = `self.__PRECACHE_MANIFEST__ = ${JSON.stringify(assets)};\n`;
+          let sw = readFileSync(swPath, 'utf8');
+          sw = manifest + sw.replace('__SW_VERSION__', `skynet-${Date.now()}`);
+          writeFileSync(swPath, sw);
+        } catch (e) {
+          console.error('[sw-version] error:', e);
+        }
       },
     },
   ],
