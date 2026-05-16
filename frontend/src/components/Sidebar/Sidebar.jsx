@@ -82,6 +82,7 @@ function ChangePasswordModal({ onClose }) {
 
 function PlaylistItem({ playlist, onNavigate }) {
   const [renaming, setRenaming] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [name, setName] = useState(playlist.name);
   const { renamePlaylist, deletePlaylist } = useUserDataStore();
 
@@ -114,12 +115,32 @@ function PlaylistItem({ playlist, onNavigate }) {
           {playlist.name}
         </NavLink>
       )}
-      <button
-        onClick={() => deletePlaylist(playlist.id)}
-        className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-colors shrink-0"
-      >
-        <Trash2 size={13} />
-      </button>
+      {confirming ? (
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-xs text-red-400">Delete?</span>
+          <button
+            onClick={() => deletePlaylist(playlist.id)}
+            className="text-red-400 hover:text-red-300 transition-colors"
+            title="Confirm delete"
+          >
+            <Check size={13} />
+          </button>
+          <button
+            onClick={() => setConfirming(false)}
+            className="text-zinc-500 hover:text-white transition-colors"
+            title="Cancel"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setConfirming(true)}
+          className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-colors shrink-0"
+        >
+          <Trash2 size={13} />
+        </button>
+      )}
     </div>
   );
 }
