@@ -253,7 +253,7 @@ export default function Import() {
               {job.status === 'error' && <AlertCircle size={18} className="text-red-400" />}
               <span className="text-white font-medium">
                 {job.status === 'running' && 'Importing…'}
-                {job.status === 'paused' && 'Paused'}
+                {job.status === 'paused' && (job.currentTrack === null && job.done > 0 ? `Interrupted — ${job.done} of ${job.total} done` : 'Paused')}
                 {job.status === 'done' && 'Import complete'}
                 {job.status === 'cancelled' && `Cancelled — ${job.done} of ${job.total} tracks done`}
                 {job.status === 'error' && 'Import failed'}

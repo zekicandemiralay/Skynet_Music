@@ -165,6 +165,13 @@ router.get('/library', (req, res) => {
     pct: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
   }));
 
+  const shortestSong = total
+    ? db.prepare('SELECT title, artist, duration FROM songs WHERE duration IS NOT NULL AND duration > 0 ORDER BY duration ASC LIMIT 1').get()
+    : null;
+  const longestSong = total
+    ? db.prepare('SELECT title, artist, duration FROM songs WHERE duration IS NOT NULL AND duration > 0 ORDER BY duration DESC LIMIT 1').get()
+    : null;
+
   res.json({
     total_songs: total,
     total_duration: totalDuration,
@@ -173,6 +180,8 @@ router.get('/library', (req, res) => {
     min_duration: minDur === Infinity ? 0 : minDur,
     max_duration: maxDur,
     distribution,
+    shortest_song: shortestSong || null,
+    longest_song: longestSong || null,
   });
 });
 

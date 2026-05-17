@@ -105,14 +105,56 @@ const UPSERT_SQL = `
   DO UPDATE SET data_json = excluded.data_json, updated_at = excluded.updated_at
 `;
 
-async function runImport(userId, playlists) {
+// Persist job state + remaining playlists to DB so restarts can offer resume
+function persistImportState(userId, job, playlists, pli, ti) {
+  try {
+    const db = getDb();
+    const state = {
+      status: job.status,
+      done: job.done,
+      total: job.total,
+      errors: job.errors,
+      playlistNames: job.playlists,
+      currentPlaylist: job.currentPlaylist,
+      playlists,   // remaining (unfinished) track lists
+      playlistIndex: pli,
+      trackIndex: ti,
+    };
+    db.prepare(UPSERT_SQL).run(userId, 'import_job', JSON.stringify(state));
+  } catch {}
+}
+
+async function downloadWithRetry(track, maxAttempts = 3) {
+  let lastErr;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      if (track.videoId) {
+        return await withTimeout(downloadAudio(track.videoId, MUSIC_DIR(), () => {}), 5 * 60 * 1000);
+      } else {
+        const query = track.artist ? `${track.artist} - ${track.name}` : track.name;
+        return await withTimeout(downloadBySearch(query, MUSIC_DIR(), () => {}), 5 * 60 * 1000);
+      }
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts - 1) {
+        await new Promise(r => setTimeout(r, 4000 * (attempt + 1))); // 4s, 8s backoff
+      }
+    }
+  }
+  throw lastErr;
+}
+
+async function runImport(userId, playlists, startPli = 0, startTi = 0) {
   const job = importJobs.get(userId);
   const db = getDb();
-  const total = playlists.reduce((s, p) => s + p.tracks.length, 0);
-  job.total = total;
-  job.done = 0;
-  job.errors = [];
-  job.control = 'running'; // 'running' | 'paused' | 'cancel_requested'
+
+  // On fresh start compute total; on resume keep existing total/done
+  if (startPli === 0 && startTi === 0) {
+    job.total = playlists.reduce((s, p) => s + p.tracks.length, 0);
+    job.done = 0;
+    job.errors = [];
+  }
+  job.control = 'running';
 
   // Create regular playlists up front (liked songs go to a separate store)
   const playlistIds = {};
@@ -131,15 +173,22 @@ async function runImport(userId, playlists) {
     db.prepare(UPSERT_SQL).run(userId, 'playlists', JSON.stringify(userPlaylists));
   }
 
-  outer: for (const playlist of playlists) {
+  persistImportState(userId, job, playlists, startPli, startTi);
+
+  outer: for (let pli = startPli; pli < playlists.length; pli++) {
+    const playlist = playlists[pli];
     job.currentPlaylist = playlist.playlistName;
     const playlistId = playlistIds[playlist.playlistName];
+    const trackStart = pli === startPli ? startTi : 0;
 
-    for (const track of playlist.tracks) {
+    for (let ti = trackStart; ti < playlist.tracks.length; ti++) {
+      const track = playlist.tracks[ti];
+
       // Pause: wait until resumed or cancelled
       if (job.control === 'paused') {
         job.status = 'paused';
         job.currentTrack = null;
+        persistImportState(userId, job, playlists, pli, ti);
         while (job.control === 'paused') {
           await new Promise(r => setTimeout(r, 300));
         }
@@ -154,18 +203,11 @@ async function runImport(userId, playlists) {
       job.currentTrack = label;
 
       try {
-        let filepath;
-        if (track.videoId) {
-          filepath = await withTimeout(downloadAudio(track.videoId, MUSIC_DIR(), () => {}), 5 * 60 * 1000);
-        } else {
-          const query = track.artist ? `${track.artist} - ${track.name}` : track.name;
-          filepath = await withTimeout(downloadBySearch(query, MUSIC_DIR(), () => {}), 5 * 60 * 1000);
-        }
+        const filepath = await downloadWithRetry(track);
         if (filepath) {
           const song = await scanFile(filepath);
           if (song) {
             if (playlist.isLiked) {
-              // Add to liked songs store
               const likedRow = db.prepare('SELECT data_json FROM user_data WHERE user_id = ? AND data_key = ?').get(userId, 'liked_songs');
               const liked = likedRow ? JSON.parse(likedRow.data_json) : [];
               if (!liked.includes(song.id)) {
@@ -173,7 +215,6 @@ async function runImport(userId, playlists) {
                 db.prepare(UPSERT_SQL).run(userId, 'liked_songs', JSON.stringify(liked));
               }
             } else {
-              // Add to playlist
               const row = db.prepare('SELECT data_json FROM user_data WHERE user_id = ? AND data_key = ?').get(userId, 'playlists');
               const userPlaylists = row ? JSON.parse(row.data_json) : [];
               const pl = userPlaylists.find(p => p.id === playlistId);
@@ -189,6 +230,8 @@ async function runImport(userId, playlists) {
       }
 
       job.done++;
+      // Persist progress every 5 tracks so a restart can resume roughly where we left off
+      if (job.done % 5 === 0) persistImportState(userId, job, playlists, pli, ti + 1);
 
       // 3s delay between tracks — checks every 200ms so pause/cancel responds quickly
       const delayEnd = Date.now() + 3000;
@@ -202,6 +245,7 @@ async function runImport(userId, playlists) {
   job.currentTrack = null;
   job.currentPlaylist = null;
   job.control = 'idle';
+  persistImportState(userId, job, [], 0, 0);
 }
 
 // Parse a single Google Takeout playlist JSON buffer
@@ -350,9 +394,40 @@ router.post('/pause', (req, res) => {
 
 router.post('/resume', (req, res) => {
   const job = importJobs.get(req.user.id);
-  if (!job || job.status !== 'paused') return res.status(400).json({ error: 'Import is not paused' });
-  job.control = 'running';
-  job.status = 'running';
+  if (job && job.status === 'paused') {
+    job.control = 'running';
+    job.status = 'running';
+    return res.json({ ok: true });
+  }
+
+  // No in-memory job — try to restore from DB and resume
+  const db = getDb();
+  const row = db.prepare('SELECT data_json FROM user_data WHERE user_id = ? AND data_key = ?').get(req.user.id, 'import_job');
+  if (!row) return res.status(400).json({ error: 'No import to resume' });
+
+  let state;
+  try { state = JSON.parse(row.data_json); } catch { return res.status(400).json({ error: 'Corrupt import state' }); }
+
+  if (!state.playlists?.length || state.status === 'done' || state.status === 'cancelled') {
+    return res.status(400).json({ error: 'Nothing left to resume' });
+  }
+
+  const restoredJob = {
+    status: 'running',
+    done: state.done || 0,
+    total: state.total || 0,
+    currentTrack: null,
+    currentPlaylist: state.currentPlaylist || null,
+    playlists: state.playlistNames || [],
+    errors: state.errors || [],
+  };
+  importJobs.set(req.user.id, restoredJob);
+
+  runImport(req.user.id, state.playlists, state.playlistIndex || 0, state.trackIndex || 0).catch(err => {
+    const j = importJobs.get(req.user.id);
+    if (j) { j.status = 'error'; j.errorMessage = err.message; }
+  });
+
   res.json({ ok: true });
 });
 
@@ -367,11 +442,30 @@ router.post('/cancel', (req, res) => {
 
 router.get('/status', (req, res) => {
   const job = importJobs.get(req.user.id);
-  res.json(job || null);
+  if (job) return res.json(job);
+
+  // No in-memory job — check DB for an interrupted one
+  const db = getDb();
+  const row = db.prepare('SELECT data_json FROM user_data WHERE user_id = ? AND data_key = ?').get(req.user.id, 'import_job');
+  if (!row) return res.json(null);
+  try {
+    const state = JSON.parse(row.data_json);
+    // Only surface interrupted (non-terminal) jobs — done/cancelled are shown and then cleared
+    if (state.status === 'running' || state.status === 'paused') {
+      // Was running when server went down — mark as interrupted so UI offers Resume
+      return res.json({ ...state, status: 'paused', currentTrack: null });
+    }
+    return res.json(state);
+  } catch {
+    return res.json(null);
+  }
 });
 
 router.delete('/status', (req, res) => {
   importJobs.delete(req.user.id);
+  try {
+    getDb().prepare('DELETE FROM user_data WHERE user_id = ? AND data_key = ?').run(req.user.id, 'import_job');
+  } catch {}
   res.json({ ok: true });
 });
 

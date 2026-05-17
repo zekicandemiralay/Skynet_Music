@@ -25,6 +25,7 @@ const useRadioStore = create((set, get) => ({
     const { queue, queueIndex } = usePlayerStore.getState();
     const ahead = queue.length - queueIndex - 1;
     if (ahead >= 3) return;
+    const needed = 3 - ahead;
 
     filling = true;
     try {
@@ -33,20 +34,25 @@ const useRadioStore = create((set, get) => ({
         title: song.title || '',
       });
       const res = await fetch(`/api/radio/suggestions?${params}`);
-      if (!res.ok) return;
+      if (!res.ok) throw new Error('suggestions unavailable');
 
       const suggestions = await res.json();
-      const needed = 3 - ahead;
       const fresh = suggestions
         .filter(s => !seenKeys.has(`${s.artist}::${s.title}`))
         .slice(0, needed);
 
-      for (const track of fresh) {
-        seenKeys.add(`${track.artist}::${track.title}`);
-        startRadioDownload(track);
+      if (fresh.length === 0) {
+        // All suggestions already seen or Last.fm returned nothing — use library songs
+        for (let i = 0; i < needed; i++) addLibrarySongToQueue();
+      } else {
+        for (const track of fresh) {
+          seenKeys.add(`${track.artist}::${track.title}`);
+          startRadioDownload(track);
+        }
       }
     } catch {
-      // network or parse error — fail silently
+      // network or parse error — fall back to library songs
+      for (let i = 0; i < needed; i++) addLibrarySongToQueue();
     } finally {
       filling = false;
     }
@@ -61,23 +67,20 @@ async function startRadioDownload(track) {
       body: JSON.stringify({ artist: track.artist, title: track.title }),
     });
     const { jobId } = await res.json();
-    if (!jobId) return;
+    if (!jobId) { await addLibrarySongToQueue(); return; }
 
     const song = await pollUntilDone(jobId);
-    if (!song) return;
     if (!useRadioStore.getState().radioMode) return;
 
-    const wasWaiting = usePlayerStore.getState().waitingForRadio;
-    usePlayerStore.setState(s => {
-      const newQueue = [...s.queue, song];
-      schedulePreload(newQueue, s.queueIndex);
-      return { queue: newQueue };
-    });
-    // Player stalled waiting for a radio song — resume automatically
-    if (wasWaiting) {
-      usePlayerStore.getState().next();
+    if (song) {
+      appendSongToQueue(song);
+    } else {
+      // Download failed or file couldn't be indexed — fill gap with a library song
+      await addLibrarySongToQueue();
     }
-  } catch {}
+  } catch {
+    await addLibrarySongToQueue();
+  }
 }
 
 async function pollUntilDone(jobId) {
@@ -86,11 +89,39 @@ async function pollUntilDone(jobId) {
     try {
       const res = await fetch(`/api/radio/status/${jobId}`);
       const job = await res.json();
-      if (job.status === 'done' && job.song) return job.song;
+      // status=done: return song (may be null if scan failed) — don't loop forever
+      if (job.status === 'done') return job.song || null;
       if (job.status === 'error') return null;
     } catch {}
   }
   return null;
+}
+
+function appendSongToQueue(song) {
+  const wasWaiting = usePlayerStore.getState().waitingForRadio;
+  usePlayerStore.setState(s => {
+    const newQueue = [...s.queue, song];
+    schedulePreload(newQueue, s.queueIndex);
+    return { queue: newQueue };
+  });
+  if (wasWaiting) {
+    usePlayerStore.getState().next();
+  }
+}
+
+async function addLibrarySongToQueue() {
+  if (!useRadioStore.getState().radioMode) return;
+  try {
+    const res = await fetch('/api/music');
+    if (!res.ok) return;
+    const allSongs = await res.json();
+    const { queue } = usePlayerStore.getState();
+    const queueIds = new Set(queue.map(s => s.id));
+    const eligible = allSongs.filter(s => !queueIds.has(s.id));
+    if (!eligible.length) return;
+    const song = eligible[Math.floor(Math.random() * eligible.length)];
+    appendSongToQueue(song);
+  } catch {}
 }
 
 // Auto-fill queue whenever the current song changes.

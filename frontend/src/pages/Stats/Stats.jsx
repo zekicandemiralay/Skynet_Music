@@ -35,11 +35,11 @@ function fmt(s) {
 }
 
 function LibraryOverview({ data }) {
-  const { total_songs, total_duration, avg_duration, median_duration, min_duration, max_duration, distribution } = data;
+  const { total_songs, total_duration, avg_duration, median_duration, distribution, shortest_song, longest_song } = data;
   if (!total_songs) return null;
 
   const maxCount = Math.max(...distribution.map((d) => d.count), 1);
-  const maxBenford = BENFORD[0]; // 30.1 — used to scale reference bars
+  const maxBenford = BENFORD[0];
 
   return (
     <div className="bg-zinc-800/60 rounded-xl p-4 md:p-5 mt-5">
@@ -52,7 +52,7 @@ function LibraryOverview({ data }) {
       </p>
 
       {/* Key stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
         <div className="bg-zinc-700/40 rounded-lg p-3">
           <p className="text-white font-semibold text-lg">{fmtTime(total_duration)}</p>
           <p className="text-zinc-500 text-xs">Total library</p>
@@ -65,44 +65,58 @@ function LibraryOverview({ data }) {
           <p className="text-white font-semibold text-lg">{fmt(median_duration)}</p>
           <p className="text-zinc-500 text-xs">Median length</p>
         </div>
-        <div className="bg-zinc-700/40 rounded-lg p-3">
-          <p className="text-white font-semibold text-lg">{fmt(min_duration)} – {fmt(max_duration)}</p>
-          <p className="text-zinc-500 text-xs">Shortest – Longest</p>
-        </div>
       </div>
 
+      {/* Shortest / Longest */}
+      {(shortest_song || longest_song) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+          {shortest_song && (
+            <div className="bg-zinc-700/40 rounded-lg p-3">
+              <p className="text-zinc-500 text-xs mb-1">Shortest song</p>
+              <p className="text-white text-sm font-medium truncate">{shortest_song.title}</p>
+              <p className="text-zinc-400 text-xs truncate">{shortest_song.artist} · {fmt(Math.floor(shortest_song.duration))}</p>
+            </div>
+          )}
+          {longest_song && (
+            <div className="bg-zinc-700/40 rounded-lg p-3">
+              <p className="text-zinc-500 text-xs mb-1">Longest song</p>
+              <p className="text-white text-sm font-medium truncate">{longest_song.title}</p>
+              <p className="text-zinc-400 text-xs truncate">{longest_song.artist} · {fmt(Math.floor(longest_song.duration))}</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Bar chart */}
-      <div className="flex items-end gap-2 h-36 px-1">
+      <div className="flex items-end gap-1.5 h-36 px-1">
         {distribution.map(({ digit, count, pct }) => {
           const benfordPct = BENFORD[digit - 1];
           const actualH = count > 0 ? Math.max((count / maxCount) * 100, 3) : 0;
           const benfordH = (benfordPct / maxBenford) * 100;
           return (
-            <div key={digit} className="flex-1 flex flex-col items-center gap-0 group">
-              {/* Percentage label — appears on hover */}
+            <div key={digit} className="flex-1 flex flex-col items-center group">
+              {/* Pct label on hover */}
               <div className="h-5 flex items-end justify-center">
                 <span className="text-violet-300 text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity">
                   {pct}%
                 </span>
               </div>
               {/* Bar area */}
-              <div className="relative w-full flex items-end justify-center" style={{ height: '100px' }}>
-                {/* Benford expected (ghost bar) */}
+              <div className="relative w-full" style={{ height: '100px' }}>
+                {/* Benford ghost bar — full column width, subtle */}
                 <div
-                  className="absolute bottom-0 left-[15%] right-[15%] bg-white/8 rounded-t-sm"
-                  style={{ height: `${benfordH}%` }}
+                  className="absolute bottom-0 inset-x-0 rounded-t-sm"
+                  style={{ height: `${benfordH}%`, backgroundColor: 'rgba(255,255,255,0.12)' }}
                   title={`Benford expected: ${benfordPct}%`}
                 />
-                {/* Actual bar */}
+                {/* Actual bar — narrower, sits on top */}
                 <div
-                  className="absolute bottom-0 left-[25%] right-[25%] bg-violet-500/75 hover:bg-violet-400 rounded-t-sm transition-colors cursor-default"
-                  style={{ height: `${actualH}%` }}
+                  className="absolute bottom-0 rounded-t-sm transition-colors bg-violet-500/80 hover:bg-violet-400"
+                  style={{ height: `${actualH}%`, left: '20%', right: '20%' }}
                   title={`Digit ${digit}: ${count} songs (${pct}%)`}
                 />
               </div>
-              {/* Digit label */}
               <span className="text-zinc-400 text-xs font-semibold mt-1">{digit}</span>
-              {/* Count */}
               <span className="text-zinc-600 text-[10px]">{count}</span>
             </div>
           );
@@ -110,7 +124,7 @@ function LibraryOverview({ data }) {
       </div>
 
       <p className="text-zinc-700 text-[10px] text-center mt-3">
-        Purple bars = your library · ghost bars = Benford's Law expected distribution
+        Purple bars = your library · light bars = Benford's Law expected distribution
       </p>
     </div>
   );
