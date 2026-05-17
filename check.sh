@@ -33,6 +33,10 @@ COOKIE=$(mktemp)
 trap 'rm -f "$COOKIE"' EXIT
 
 printf "\n${BOLD}Skynet Music — System Diagnostic${NC}  $(date '+%Y-%m-%d %H:%M:%S')\n"
+if ! docker info &>/dev/null 2>&1; then
+  printf "  ${RED}✗ Docker not accessible — re-run as root: sudo bash check.sh${NC}\n\n"
+  exit 1
+fi
 
 # ════════════════════════════════════════════════════════════════════════
 hdr "System Resources"
@@ -330,8 +334,9 @@ hdr "Tailscale"
 # ════════════════════════════════════════════════════════════════════════
 
 if command -v tailscale &>/dev/null; then
-  TS_STATE=$(tailscale status --json 2>/dev/null | grep -oP '"BackendState":"\K[^"]+' || echo "unknown")
   TS_IP=$(tailscale ip 2>/dev/null | head -1 || echo "?")
+  TS_STATE="unknown"
+  if tailscale status &>/dev/null; then TS_STATE="Running"; fi
   if [ "$TS_STATE" = "Running" ]; then
     ok "Tailscale running — this node: ${TS_IP}"
   else
@@ -350,7 +355,8 @@ hdr "Recent Errors in Logs (last 1h)"
 
 for svc in backend frontend gluetun; do
   ERR_N=$(docker compose logs "$svc" --since 1h 2>/dev/null \
-    | grep -ciE '\b(error|fatal|exception|crash|panic)\b' || echo 0)
+    | grep -iE '\b(error|fatal|exception|crash|panic)\b' | wc -l)
+  ERR_N=${ERR_N:-0}
   if   [ "$ERR_N" -gt 20 ]; then fail  "$svc: ${ERR_N} error lines in last hour"
   elif [ "$ERR_N" -gt 5  ]; then warn  "$svc: ${ERR_N} error lines in last hour"
   else ok "$svc: ${ERR_N} error lines in last hour"; fi
