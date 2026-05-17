@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import usePlayerStore from '../../store/playerStore';
 import useUserDataStore from '../../store/userDataStore';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Shuffle, ChevronDown, Heart, ListPlus } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Music, Shuffle, ChevronDown, Heart, ListPlus, Radio } from 'lucide-react';
+import useRadioStore from '../../store/useRadioStore';
 
 function fmt(s) {
   if (!s || isNaN(s)) return '0:00';
@@ -132,6 +133,7 @@ function NowPlayingExpanded({ onClose }) {
     pause, resume, next, prev, seek, toggleShuffle,
   } = usePlayerStore();
   const { likedSongs, toggleLike } = useUserDataStore();
+  const { radioMode, toggleRadioMode } = useRadioStore();
   const liked = currentSong ? likedSongs.includes(currentSong.id) : false;
 
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -254,6 +256,9 @@ function NowPlayingExpanded({ onClose }) {
             <button onClick={toggleShuffle} className={`p-2 transition-colors ${shuffle ? 'text-green-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
               <Shuffle size={22} />
             </button>
+            <button onClick={toggleRadioMode} title={radioMode ? 'Radio on' : 'Radio off'} className={`p-2 transition-colors ${radioMode ? 'text-green-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
+              <Radio size={22} />
+            </button>
             <button onClick={() => currentSong && toggleLike(currentSong.id)} className={`p-2 transition-colors ${liked ? 'text-red-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
               <Heart size={22} className={liked ? 'fill-current' : ''} />
             </button>
@@ -289,6 +294,7 @@ export default function Player() {
     pause, resume, next, prev, seek, setVolume, toggleShuffle,
   } = usePlayerStore();
   const { likedSongs, toggleLike } = useUserDataStore();
+  const { radioMode, toggleRadioMode } = useRadioStore();
   const liked = currentSong ? likedSongs.includes(currentSong.id) : false;
 
   const [expanded, setExpanded] = useState(false);
@@ -414,6 +420,9 @@ export default function Player() {
             <div className="flex items-center gap-6">
               <button onClick={sp(toggleShuffle)} className={`transition-colors ${shuffle ? 'text-white' : 'text-zinc-600 hover:text-zinc-400'}`} title={shuffle ? 'Shuffle on' : 'Shuffle off'}>
                 <Shuffle size={16} />
+              </button>
+              <button onClick={sp(toggleRadioMode)} title={radioMode ? 'Radio on' : 'Radio off'} className={`transition-colors ${radioMode ? 'text-green-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
+                <Radio size={16} />
               </button>
               <button onClick={sp(prev)} disabled={!currentSong} className="text-zinc-400 hover:text-white transition-colors disabled:opacity-30">
                 <SkipBack size={20} />
