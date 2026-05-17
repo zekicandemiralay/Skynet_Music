@@ -32,6 +32,10 @@ BASE="https://localhost:${HTTPS_PORT}"
 COOKIE=$(mktemp)
 trap 'rm -f "$COOKIE"' EXIT
 
+# Resolve container IDs by compose service label (works regardless of project name)
+cid() { docker ps -q --filter "label=com.docker.compose.service=$1" | head -1; }
+dexec() { local c; c=$(cid "$1"); shift; [ -n "$c" ] && docker exec -i "$c" "$@" || echo ""; }
+
 printf "\n${BOLD}Skynet Music — System Diagnostic${NC}  $(date '+%Y-%m-%d %H:%M:%S')\n"
 if ! docker info &>/dev/null 2>&1; then
   printf "  ${RED}✗ Docker not accessible — re-run as root: sudo bash check.sh${NC}\n\n"
@@ -72,9 +76,13 @@ hdr "Docker Containers"
 # ════════════════════════════════════════════════════════════════════════
 
 for svc in gluetun backend frontend; do
-  CID=$(docker compose ps -q "$svc" 2>/dev/null | head -1)
+  # Use compose service label — works regardless of project name
+  CID=$(docker ps -q --filter "label=com.docker.compose.service=${svc}" | head -1)
   if [ -z "$CID" ]; then
-    fail "$svc: container not found (not started?)"
+    # Also check stopped containers
+    CID_ANY=$(docker ps -aq --filter "label=com.docker.compose.service=${svc}" | head -1)
+    [ -n "$CID_ANY" ] && fail "$svc: exists but is stopped/exited" \
+                      || fail "$svc: container not found (never started?)"
     continue
   fi
   STATE=$(docker inspect --format '{{.State.Status}}' "$CID" 2>/dev/null || echo "unknown")
@@ -88,15 +96,14 @@ for svc in gluetun backend frontend; do
   fi
 done
 
-info "Uptime overview:"
-docker compose ps --format "table {{.Name}}\t{{.Status}}" 2>/dev/null | tail -n +2 | \
-  while IFS= read -r line; do info "  $line"; done
+info "All running containers:"
+docker ps --format "  · {{.Names}}\t{{.Status}}" 2>/dev/null | head -10
 
 # ════════════════════════════════════════════════════════════════════════
 hdr "VPN (Gluetun)"
 # ════════════════════════════════════════════════════════════════════════
 
-VPN_IP=$(docker compose exec -T backend \
+VPN_IP=$(dexec backend \
   curl -s --max-time 15 --proxy http://gluetun:8888 https://api.ipify.org 2>/dev/null || echo "")
 if [ -n "$VPN_IP" ]; then
   ok "VPN proxy reachable — exit IP: ${VPN_IP}"
@@ -225,7 +232,7 @@ fi
 hdr "Database"
 # ════════════════════════════════════════════════════════════════════════
 
-DB_RESULT=$(docker compose exec -T backend node -e "
+DB_RESULT=$(dexec backend node -e "
   try {
     const { getDb } = require('./src/db');
     const db = getDb();
@@ -262,7 +269,7 @@ fi
 hdr "Music Library (Disk)"
 # ════════════════════════════════════════════════════════════════════════
 
-FILE_COUNT=$(docker compose exec -T backend \
+FILE_COUNT=$(dexec backend \
   find /music -type f \( -name "*.mp3" -o -name "*.flac" -o -name "*.wav" \
     -o -name "*.m4a" -o -name "*.ogg" -o -name "*.opus" -o -name "*.aac" \) \
   2>/dev/null | wc -l || echo "?")
@@ -271,14 +278,14 @@ elif [ "$FILE_COUNT" = "?" ]; then warn "Could not count files in /music"
 else ok "${FILE_COUNT} audio files on disk"; fi
 
 # Writable check
-if docker compose exec -T backend sh -c 'touch /music/.skynet_write_test && rm /music/.skynet_write_test' 2>/dev/null; then
+if dexec backend sh -c 'touch /music/.skynet_write_test && rm /music/.skynet_write_test' 2>/dev/null; then
   ok "Music directory is writable"
 else
   fail "Music directory is NOT writable — downloads will fail"
 fi
 
 # Disk space for music
-MUSIC_DISK=$(docker compose exec -T backend df -h /music 2>/dev/null | awk 'NR==2{print $5, $4}' || echo "? ?")
+MUSIC_DISK=$(dexec backend df -h /music 2>/dev/null | awk 'NR==2{print $5, $4}' || echo "? ?")
 MDISK_PCT=${MUSIC_DISK% *}; MDISK_FREE=${MUSIC_DISK#* }; MDISK_NUM=${MDISK_PCT//%/}
 if   [ "${MDISK_NUM:-0}" -gt 95 ] 2>/dev/null; then fail "Music disk ${MDISK_PCT} full — only ${MDISK_FREE} free"
 elif [ "${MDISK_NUM:-0}" -gt 85 ] 2>/dev/null; then warn "Music disk ${MDISK_PCT} used — ${MDISK_FREE} free"
@@ -288,7 +295,7 @@ else info "Music disk: ${MDISK_PCT} used, ${MDISK_FREE} free"; fi
 hdr "yt-dlp"
 # ════════════════════════════════════════════════════════════════════════
 
-YTVER=$(docker compose exec -T backend yt-dlp --version 2>/dev/null | tr -d '\r\n' || echo "")
+YTVER=$(dexec backend yt-dlp --version 2>/dev/null | tr -d '\r\n' || echo "")
 if [ -n "$YTVER" ]; then
   ok "yt-dlp installed — version ${YTVER}"
 else
@@ -296,7 +303,7 @@ else
 fi
 
 info "Testing YouTube search via VPN proxy (may take ~20s)..."
-YT_RESULT=$(docker compose exec -T backend yt-dlp \
+YT_RESULT=$(dexec backend yt-dlp \
   --proxy http://gluetun:8888 \
   "ytsearch1:Rick Astley Never Gonna Give You Up" \
   --dump-json --flat-playlist --no-warnings \
@@ -354,20 +361,27 @@ hdr "Recent Errors in Logs (last 1h)"
 # ════════════════════════════════════════════════════════════════════════
 
 for svc in backend frontend gluetun; do
-  ERR_N=$(docker compose logs "$svc" --since 1h 2>/dev/null \
-    | grep -iE '\b(error|fatal|exception|crash|panic)\b' | wc -l)
-  ERR_N=${ERR_N:-0}
+  C=$(cid "$svc")
+  ERR_N=0
+  if [ -n "$C" ]; then
+    ERR_N=$(docker logs "$C" --since 1h 2>&1 \
+      | grep -iE '\b(error|fatal|exception|crash|panic)\b' | wc -l)
+    ERR_N=${ERR_N:-0}
+  fi
   if   [ "$ERR_N" -gt 20 ]; then fail  "$svc: ${ERR_N} error lines in last hour"
   elif [ "$ERR_N" -gt 5  ]; then warn  "$svc: ${ERR_N} error lines in last hour"
   else ok "$svc: ${ERR_N} error lines in last hour"; fi
 done
 
 # Show last few actual errors from backend if any
-BACKEND_ERRS=$(docker compose logs backend --since 1h 2>/dev/null \
-  | grep -iE '\b(error|fatal)\b' | tail -5 || echo "")
-if [ -n "$BACKEND_ERRS" ]; then
-  info "Last backend errors:"
-  while IFS= read -r line; do info "  $line"; done <<< "$BACKEND_ERRS"
+BC=$(cid backend)
+if [ -n "$BC" ]; then
+  BACKEND_ERRS=$(docker logs "$BC" --since 1h 2>&1 \
+    | grep -iE '\b(error|fatal)\b' | tail -5 || echo "")
+  if [ -n "$BACKEND_ERRS" ]; then
+    info "Last backend errors:"
+    while IFS= read -r line; do info "  $line"; done <<< "$BACKEND_ERRS"
+  fi
 fi
 
 # ════════════════════════════════════════════════════════════════════════
