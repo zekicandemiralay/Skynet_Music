@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Clock, Music, Download, Flame, TrendingUp, BarChart2 } from 'lucide-react';
+import { Clock, Music, Download, Flame, TrendingUp, BarChart2, Library } from 'lucide-react';
+
+// Benford's Law expected percentages for first digits 1–9
+const BENFORD = [30.1, 17.6, 12.5, 9.7, 7.9, 6.7, 5.8, 5.1, 4.6];
 
 function fmtTime(s) {
   if (!s) return '0 min';
@@ -23,8 +26,99 @@ function StatCard({ icon: Icon, label, value, color }) {
   );
 }
 
+function fmt(s) {
+  if (!s) return '0s';
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return sec > 0 ? `${m}m ${sec}s` : `${m}m`;
+}
+
+function LibraryOverview({ data }) {
+  const { total_songs, total_duration, avg_duration, median_duration, min_duration, max_duration, distribution } = data;
+  if (!total_songs) return null;
+
+  const maxCount = Math.max(...distribution.map((d) => d.count), 1);
+  const maxBenford = BENFORD[0]; // 30.1 — used to scale reference bars
+
+  return (
+    <div className="bg-zinc-800/60 rounded-xl p-4 md:p-5 mt-5">
+      <div className="flex items-center gap-2 mb-1">
+        <Library size={16} className="text-violet-400" />
+        <h2 className="text-white font-semibold">Library Duration Distribution</h2>
+      </div>
+      <p className="text-zinc-500 text-xs mb-5">
+        First digit of each song's duration in seconds — {total_songs.toLocaleString()} songs total
+      </p>
+
+      {/* Key stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className="bg-zinc-700/40 rounded-lg p-3">
+          <p className="text-white font-semibold text-lg">{fmtTime(total_duration)}</p>
+          <p className="text-zinc-500 text-xs">Total library</p>
+        </div>
+        <div className="bg-zinc-700/40 rounded-lg p-3">
+          <p className="text-white font-semibold text-lg">{fmt(avg_duration)}</p>
+          <p className="text-zinc-500 text-xs">Avg song length</p>
+        </div>
+        <div className="bg-zinc-700/40 rounded-lg p-3">
+          <p className="text-white font-semibold text-lg">{fmt(median_duration)}</p>
+          <p className="text-zinc-500 text-xs">Median length</p>
+        </div>
+        <div className="bg-zinc-700/40 rounded-lg p-3">
+          <p className="text-white font-semibold text-lg">{fmt(min_duration)} – {fmt(max_duration)}</p>
+          <p className="text-zinc-500 text-xs">Shortest – Longest</p>
+        </div>
+      </div>
+
+      {/* Bar chart */}
+      <div className="flex items-end gap-2 h-36 px-1">
+        {distribution.map(({ digit, count, pct }) => {
+          const benfordPct = BENFORD[digit - 1];
+          const actualH = count > 0 ? Math.max((count / maxCount) * 100, 3) : 0;
+          const benfordH = (benfordPct / maxBenford) * 100;
+          return (
+            <div key={digit} className="flex-1 flex flex-col items-center gap-0 group">
+              {/* Percentage label — appears on hover */}
+              <div className="h-5 flex items-end justify-center">
+                <span className="text-violet-300 text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                  {pct}%
+                </span>
+              </div>
+              {/* Bar area */}
+              <div className="relative w-full flex items-end justify-center" style={{ height: '100px' }}>
+                {/* Benford expected (ghost bar) */}
+                <div
+                  className="absolute bottom-0 left-[15%] right-[15%] bg-white/8 rounded-t-sm"
+                  style={{ height: `${benfordH}%` }}
+                  title={`Benford expected: ${benfordPct}%`}
+                />
+                {/* Actual bar */}
+                <div
+                  className="absolute bottom-0 left-[25%] right-[25%] bg-violet-500/75 hover:bg-violet-400 rounded-t-sm transition-colors cursor-default"
+                  style={{ height: `${actualH}%` }}
+                  title={`Digit ${digit}: ${count} songs (${pct}%)`}
+                />
+              </div>
+              {/* Digit label */}
+              <span className="text-zinc-400 text-xs font-semibold mt-1">{digit}</span>
+              {/* Count */}
+              <span className="text-zinc-600 text-[10px]">{count}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-zinc-700 text-[10px] text-center mt-3">
+        Purple bars = your library · ghost bars = Benford's Law expected distribution
+      </p>
+    </div>
+  );
+}
+
 export default function Stats() {
   const [stats, setStats] = useState(null);
+  const [libraryStats, setLibraryStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,6 +126,10 @@ export default function Stats() {
       .then((r) => r.json())
       .then((data) => { setStats(data); setLoading(false); })
       .catch(() => setLoading(false));
+    fetch('/api/me/stats/library')
+      .then((r) => r.json())
+      .then(setLibraryStats)
+      .catch(() => {});
   }, []);
 
   if (loading) {
@@ -193,6 +291,9 @@ export default function Stats() {
           )}
         </>
       )}
+
+      {/* Library-wide distribution — always shown as long as there are songs */}
+      {libraryStats && <LibraryOverview data={libraryStats} />}
     </div>
   );
 }

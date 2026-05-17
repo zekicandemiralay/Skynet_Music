@@ -133,4 +133,47 @@ router.get('/', (req, res) => {
   });
 });
 
+// ── Library-wide duration distribution (all users, updates on every scan/download) ──
+
+router.get('/library', (req, res) => {
+  const db = getDb();
+  const rows = db.prepare('SELECT duration FROM songs WHERE duration IS NOT NULL AND duration > 0').all();
+
+  const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 };
+  let totalDuration = 0;
+  let minDur = Infinity;
+  let maxDur = 0;
+  const durations = [];
+
+  for (const { duration } of rows) {
+    const secs = Math.floor(duration);
+    totalDuration += secs;
+    if (secs < minDur) minDur = secs;
+    if (secs > maxDur) maxDur = secs;
+    durations.push(secs);
+    const fd = parseInt(String(secs)[0], 10);
+    if (fd >= 1 && fd <= 9) dist[fd]++;
+  }
+
+  durations.sort((a, b) => a - b);
+  const total = rows.length;
+  const medianDuration = total ? durations[Math.floor(total / 2)] : 0;
+
+  const distribution = Object.entries(dist).map(([digit, count]) => ({
+    digit: parseInt(digit, 10),
+    count,
+    pct: total > 0 ? Math.round((count / total) * 1000) / 10 : 0,
+  }));
+
+  res.json({
+    total_songs: total,
+    total_duration: totalDuration,
+    avg_duration: total > 0 ? Math.round(totalDuration / total) : 0,
+    median_duration: medianDuration,
+    min_duration: minDur === Infinity ? 0 : minDur,
+    max_duration: maxDur,
+    distribution,
+  });
+});
+
 module.exports = router;
