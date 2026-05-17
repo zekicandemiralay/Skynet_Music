@@ -121,23 +121,28 @@ const usePlayerStore = create((set, get) => ({
     set({ currentSong: song, isPlaying: true, currentTime: 0, queue: queue || [song], queueIndex, playContext: newContext });
     applyMediaSessionMeta(song);
 
-    // Only check IndexedDB if the song is known to be cached offline —
-    // skipping the lookup for uncached songs cuts startup latency significantly.
-    let src = `/api/music/${song.id}/stream`;
+    // Play immediately from stream URL — no await before play() so iOS keeps
+    // the user gesture context and audio starts without delay.
+    const streamSrc = `/api/music/${song.id}/stream`;
+    audio.src = streamSrc;
+    audio.play().catch(() => {});
+    const { queue: q, queueIndex: qi } = usePlayerStore.getState();
+    schedulePreload(q, qi);
+
+    // Background: if this song is cached, load the blob and swap in only when
+    // offline (stream would fail anyway) or before audio has started buffering.
     const { cachedIds } = useOfflineStore.getState();
     if (cachedIds.has(song.id)) {
-      try {
-        const blob = await getAudioBlob(song.id);
-        if (blob) src = URL.createObjectURL(blob);
-      } catch {}
-    }
-
-    // Guard: only assign src if the user hasn't switched to another song during the cache lookup
-    if (usePlayerStore.getState().currentSong?.id === song.id) {
-      audio.src = src;
-      audio.play().catch(() => {});
-      const { queue: q, queueIndex: qi } = usePlayerStore.getState();
-      schedulePreload(q, qi);
+      getAudioBlob(song.id).then((blob) => {
+        if (!blob || usePlayerStore.getState().currentSong?.id !== song.id) return;
+        if (navigator.onLine && audio.readyState >= 2) return; // stream already buffering — don't disrupt
+        const blobUrl = URL.createObjectURL(blob);
+        const t = audio.currentTime;
+        const wasPlaying = !audio.paused;
+        audio.src = blobUrl;
+        if (t > 0) audio.currentTime = t;
+        if (wasPlaying) audio.play().catch(() => {});
+      }).catch(() => {});
     }
   },
 
