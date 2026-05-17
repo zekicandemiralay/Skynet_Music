@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import usePlayerStore from '../../store/playerStore';
 import useUserDataStore from '../../store/userDataStore';
@@ -142,6 +142,8 @@ function NowPlayingExpanded({ onClose }) {
   const startY = useRef(0);
   const dragging = useRef(false);
   const entered = useRef(false);
+  const panelRef = useRef(null);
+  const dragYRef = useRef(0);
 
   const onTouchStart = (e) => {
     if (e.target.tagName === 'INPUT') return;
@@ -149,22 +151,35 @@ function NowPlayingExpanded({ onClose }) {
     dragging.current = true;
     setSnapping(false);
   };
-  const onTouchMove = (e) => {
-    if (!dragging.current) return;
-    const delta = e.touches[0].clientY - startY.current;
-    if (delta > 0) setDragY(delta);
-  };
-  const onTouchEnd = () => {
+  const onTouchEnd = useCallback(() => {
     if (!dragging.current) return;
     dragging.current = false;
-    if (dragY > 80) {
+    if (dragYRef.current > 80) {
       onClose();
-    } else if (dragY > 0) {
+    } else if (dragYRef.current > 0) {
       setSnapping(true);
       setDragY(0);
+      dragYRef.current = 0;
       setTimeout(() => setSnapping(false), 280);
     }
-  };
+  }, [onClose]);
+
+  // Non-passive touchmove so we can preventDefault and stop background scroll
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const handler = (e) => {
+      if (!dragging.current || e.target.tagName === 'INPUT') return;
+      const delta = e.touches[0].clientY - startY.current;
+      if (delta > 0) {
+        e.preventDefault();
+        dragYRef.current = delta;
+        setDragY(delta);
+      }
+    };
+    el.addEventListener('touchmove', handler, { passive: false });
+    return () => el.removeEventListener('touchmove', handler);
+  }, []);
 
   const panelStyle = (() => {
     if (dragY > 0) return { zIndex: 200, transform: `translateY(${dragY}px)` };
@@ -175,11 +190,11 @@ function NowPlayingExpanded({ onClose }) {
 
   return (
     <div
+      ref={panelRef}
       className="fixed inset-0 bg-zinc-950 flex flex-col"
       style={panelStyle}
       onAnimationEnd={() => { entered.current = true; }}
       onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
       {/* Drag handle */}

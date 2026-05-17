@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { getAudioBlob } from '../lib/offlineLib';
+import useOfflineStore from './useOfflineStore';
 
 // Weighted shuffle: songs played more tend to appear earlier in the queue
 function weightedShuffle(songs) {
@@ -93,7 +94,10 @@ const usePlayerStore = create((set, get) => ({
   playSong: async (song, queue = null, queueIndex = 0) => {
     const state = get();
     if (state.currentSong?.id === song.id) {
-      state.isPlaying ? audio.pause() : audio.play();
+      // Re-clicking the current song restarts it from the beginning
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+      set({ currentTime: 0 });
       return;
     }
     // Flush previous song's play time before switching
@@ -104,12 +108,16 @@ const usePlayerStore = create((set, get) => ({
     set({ currentSong: song, isPlaying: true, currentTime: 0, queue: queue || [song], queueIndex });
     applyMediaSessionMeta(song);
 
-    // Use cached blob if available, otherwise stream from server
+    // Only check IndexedDB if the song is known to be cached offline —
+    // skipping the lookup for uncached songs cuts startup latency significantly.
     let src = `/api/music/${song.id}/stream`;
-    try {
-      const blob = await getAudioBlob(song.id);
-      if (blob) src = URL.createObjectURL(blob);
-    } catch {}
+    const { cachedIds } = useOfflineStore.getState();
+    if (cachedIds.has(song.id)) {
+      try {
+        const blob = await getAudioBlob(song.id);
+        if (blob) src = URL.createObjectURL(blob);
+      } catch {}
+    }
 
     // Guard: only assign src if the user hasn't switched to another song during the cache lookup
     if (usePlayerStore.getState().currentSong?.id === song.id) {
