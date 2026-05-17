@@ -6,6 +6,7 @@ import useUserDataStore from '../../store/userDataStore';
 import useOfflineStore from '../../store/useOfflineStore';
 import useMixStore from '../../store/useMixStore';
 import useFeaturedStore from '../../store/useFeaturedStore';
+import useRadioStore from '../../store/useRadioStore';
 
 function OfflineButton({ songs }) {
   const { cachedIds, downloading, cacheSongs, removeSongs } = useOfflineStore();
@@ -165,6 +166,8 @@ export default function Library({ view = 'all' }) {
   const { playSong, currentSong, isPlaying, shufflePlay } = usePlayerStore();
   const { cachedIds, downloading } = useOfflineStore();
   const { likedSongs, playlists, toggleLike, removeFromPlaylist } = useUserDataStore();
+  const radioMode = useRadioStore((s) => s.radioMode);
+  const isPlaylist = view === 'playlist' || view === 'liked';
   const loadMixes = useMixStore((s) => s.loadMixes);
   const navigate = useNavigate();
 
@@ -259,7 +262,7 @@ export default function Library({ view = 'all' }) {
           {filtered.length > 0 && (
             <>
               <button
-                onClick={() => shufflePlay(filtered, view === 'playlist' || view === 'liked' ? 'playlist' : 'single')}
+                onClick={() => shufflePlay(filtered, isPlaylist ? 'playlist' : 'single')}
                 className="flex items-center gap-2 px-3 md:px-4 py-2 bg-white text-black rounded-full text-sm font-semibold hover:bg-zinc-200 transition-colors"
               >
                 <Shuffle size={15} />
@@ -356,7 +359,7 @@ export default function Library({ view = 'all' }) {
                 className={`grid grid-cols-[1fr_3rem_3.5rem] md:grid-cols-[2rem_1fr_1fr_1fr_4rem_5rem] gap-2 md:gap-3 px-3 md:px-4 py-3 md:py-2 rounded-md cursor-pointer transition-colors items-center group border-b border-zinc-800/50 md:border-0 last:border-0 ${
                   active ? 'bg-zinc-700/40' : 'hover:bg-zinc-700/20'
                 }`}
-                onClick={() => playSong(song, filtered, i, view === 'playlist' || view === 'liked' ? 'playlist' : 'single')}
+                onClick={() => playSong(song, isPlaylist || !radioMode ? filtered : [song], isPlaylist || !radioMode ? i : 0, isPlaylist ? 'playlist' : 'single')}
                 onMouseEnter={() => setHovered(song.id)}
                 onMouseLeave={() => setHovered(null)}
               >
