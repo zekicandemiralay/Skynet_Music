@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 
 const PROXY_ARGS = process.env.YTDLP_PROXY ? ['--proxy', process.env.YTDLP_PROXY] : [];
+const RATE_ARGS = process.env.YTDLP_RATE_LIMIT ? ['--limit-rate', process.env.YTDLP_RATE_LIMIT] : [];
 
 function searchYoutube(query, limit = 20) {
   return new Promise((resolve, reject) => {
@@ -63,6 +64,7 @@ function downloadAudio(videoId, outputDir, onProgress) {
       '-o', `${outputDir}/%(uploader)s - %(title)s.%(ext)s`,
       '--no-playlist',
       ...PROXY_ARGS,
+      ...RATE_ARGS,
     ]);
 
     let lastFile = '';
@@ -105,6 +107,7 @@ function downloadBySearch(query, outputDir, onProgress) {
       '-o', `${outputDir}/%(uploader)s - %(title)s.%(ext)s`,
       '--no-playlist',
       ...PROXY_ARGS,
+      ...RATE_ARGS,
     ]);
 
     let lastFile = '';
