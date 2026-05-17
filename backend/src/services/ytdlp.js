@@ -1,5 +1,7 @@
 const { spawn } = require('child_process');
 
+const PROXY_ARGS = process.env.YTDLP_PROXY ? ['--proxy', process.env.YTDLP_PROXY] : [];
+
 function searchYoutube(query, limit = 20) {
   return new Promise((resolve, reject) => {
     const proc = spawn('yt-dlp', [
@@ -54,12 +56,13 @@ function downloadAudio(videoId, outputDir, onProgress) {
       '-x',
       '--audio-format', 'mp3',
       '--audio-quality', '0',
-      '--embed-metadata',       // write ID3 tags (title, artist, album where available)
-      '--embed-thumbnail',      // embed thumbnail as album art
-      '--parse-metadata', 'title:%(artist)s - %(title)s', // extract artist from "Artist - Title" format
+      '--embed-metadata',
+      '--embed-thumbnail',
+      '--parse-metadata', 'title:%(artist)s - %(title)s',
       '--newline',
       '-o', `${outputDir}/%(uploader)s - %(title)s.%(ext)s`,
       '--no-playlist',
+      ...PROXY_ARGS,
     ]);
 
     let lastFile = '';
@@ -101,6 +104,7 @@ function downloadBySearch(query, outputDir, onProgress) {
       '--newline',
       '-o', `${outputDir}/%(uploader)s - %(title)s.%(ext)s`,
       '--no-playlist',
+      ...PROXY_ARGS,
     ]);
 
     let lastFile = '';

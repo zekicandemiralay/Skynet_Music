@@ -1,4 +1,25 @@
 services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=surfshark
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - SERVER_COUNTRIES=${VPN_COUNTRY:-Netherlands}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/v1/vpn/status | grep -q running"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - app-network
+
   backend:
     build:
       context: ./backend
@@ -14,6 +35,10 @@ services:
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - SECURE_COOKIE=${SECURE_COOKIE:-true}
+      - YTDLP_PROXY=http://gluetun:8888
+    depends_on:
+      gluetun:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - app-network
