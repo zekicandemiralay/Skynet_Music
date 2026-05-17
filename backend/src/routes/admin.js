@@ -2,9 +2,22 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const mm = require('music-metadata');
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db');
 const { requireAdmin } = require('../middleware/auth');
+
+const MUSIC_DIR = process.env.MUSIC_DIR || '/music';
+
+function sanitizeFolder(name) {
+  return (name || '')
+    .replace(/[/\\:*?"<>|]/g, '_')
+    .replace(/\.+$/, '')
+    .trim()
+    .slice(0, 100) || 'Unknown Artist';
+}
 
 router.use(requireAdmin);
 
@@ -119,6 +132,57 @@ router.delete('/featured/:id/songs/:songId', (req, res) => {
     'DELETE FROM featured_playlist_songs WHERE playlist_id = ? AND song_id = ?'
   ).run(req.params.id, req.params.songId);
   res.json({ ok: true });
+});
+
+// ── Library reorganization ────────────────────────────────────────────────────
+
+router.post('/reorganize', async (req, res) => {
+  const db = getDb();
+  const songs = db.prepare('SELECT * FROM songs').all();
+  const update = db.prepare('UPDATE songs SET filepath = ? WHERE id = ?');
+
+  let moved = 0, skipped = 0, errors = 0;
+
+  for (const song of songs) {
+    if (!fs.existsSync(song.filepath)) { errors++; continue; }
+
+    // Already in a subfolder → skip
+    const rel = path.relative(MUSIC_DIR, song.filepath);
+    if (rel.includes(path.sep)) { skipped++; continue; }
+
+    // Prefer DB artist; fall back to embedded ID3 tag
+    let artist = song.artist && song.artist !== 'Unknown Artist' ? song.artist : null;
+    if (!artist) {
+      try {
+        const meta = await mm.parseFile(song.filepath, { skipCovers: true, duration: false });
+        artist = meta.common.artist || null;
+      } catch {}
+    }
+
+    const folder = sanitizeFolder(artist || 'Unknown Artist');
+    const artistDir = path.join(MUSIC_DIR, folder);
+    const filename = path.basename(song.filepath);
+    let dest = path.join(artistDir, filename);
+
+    // Resolve name collision
+    if (fs.existsSync(dest) && dest !== song.filepath) {
+      const ext = path.extname(filename);
+      const base = path.basename(filename, ext);
+      dest = path.join(artistDir, `${base}_${song.id.slice(0, 6)}${ext}`);
+    }
+
+    try {
+      fs.mkdirSync(artistDir, { recursive: true });
+      fs.renameSync(song.filepath, dest);
+      update.run(dest, song.id);
+      moved++;
+    } catch (err) {
+      console.error(`Reorganize: failed to move ${song.filepath}:`, err.message);
+      errors++;
+    }
+  }
+
+  res.json({ total: songs.length, moved, skipped, errors });
 });
 
 module.exports = router;

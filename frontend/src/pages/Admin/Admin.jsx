@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { UserPlus, Trash2, ShieldCheck, User, KeyRound, X, Plus, Check, Search, Download, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Edit2 } from 'lucide-react';
+import { UserPlus, Trash2, ShieldCheck, User, KeyRound, X, Plus, Check, Search, Download, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Edit2, FolderSync } from 'lucide-react';
 import useFeaturedStore from '../../store/useFeaturedStore';
 
 // ── Shared dialogs ────────────────────────────────────────────────────────────
@@ -562,6 +562,54 @@ function CollectionsTab() {
 
 // ── Main Admin page ───────────────────────────────────────────────────────────
 
+function LibraryTab() {
+  const [status, setStatus] = useState(null);
+  const [running, setRunning] = useState(false);
+
+  async function reorganize() {
+    setRunning(true);
+    setStatus(null);
+    try {
+      const res = await fetch('/api/admin/reorganize', { method: 'POST' });
+      setStatus(await res.json());
+    } catch {
+      setStatus({ error: 'Request failed' });
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-zinc-800/50 rounded-xl p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <FolderSync size={18} className="text-zinc-400" />
+          <h3 className="text-white font-semibold">Reorganize Library</h3>
+        </div>
+        <p className="text-zinc-400 text-sm">
+          Moves all flat files in your music folder into <span className="text-zinc-200 font-mono text-xs">Artist/Song.mp3</span> subfolders.
+          Files already in subfolders are skipped. Safe to run multiple times.
+        </p>
+        <button
+          onClick={reorganize}
+          disabled={running}
+          className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-full text-sm font-semibold hover:bg-zinc-200 transition-colors disabled:opacity-50"
+        >
+          <FolderSync size={15} className={running ? 'animate-spin' : ''} />
+          {running ? 'Reorganizing…' : 'Reorganize Now'}
+        </button>
+        {status && !status.error && (
+          <p className="text-sm text-zinc-300">
+            Done — <span className="text-green-400">{status.moved} moved</span>, {status.skipped} already organized
+            {status.errors > 0 && <span className="text-red-400">, {status.errors} errors</span>}
+          </p>
+        )}
+        {status?.error && <p className="text-sm text-red-400">{status.error}</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function Admin() {
   const [tab, setTab] = useState('users');
 
@@ -571,7 +619,7 @@ export default function Admin() {
 
       {/* Tab bar */}
       <div className="flex gap-1 bg-zinc-800/60 rounded-xl p-1 mb-6 w-fit">
-        {[['users', 'Users'], ['collections', 'Collections']].map(([key, label]) => (
+        {[['users', 'Users'], ['collections', 'Collections'], ['library', 'Library']].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -586,6 +634,7 @@ export default function Admin() {
 
       {tab === 'users' && <UsersTab />}
       {tab === 'collections' && <CollectionsTab />}
+      {tab === 'library' && <LibraryTab />}
     </div>
   );
 }
