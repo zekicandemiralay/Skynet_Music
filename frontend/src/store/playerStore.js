@@ -274,6 +274,22 @@ function cancelPendingDeepSeek() {
   pendingDeepSeek = null;
 }
 
+// The restore-on-page-load block at the bottom of this file arms a
+// 'loadedmetadata' listener to resume the last session's playback position.
+// Tracked here so it can be cancelled: it only ever removed ITSELF when it
+// fired, but on mobile the browser defers media loading until a user gesture,
+// so it typically does NOT fire at page load — it just sits armed. Then the
+// first song the user actually taps triggers metadata loading, the stale
+// listener fires against THAT song, and playback jumps to the previous
+// session's timestamp. Confirmed reported in production: tapping a song
+// started it partway through, at a position from the last session.
+let pendingRestoreSeek = null;
+function cancelPendingRestoreSeek() {
+  if (!pendingRestoreSeek) return;
+  audio.removeEventListener('loadedmetadata', pendingRestoreSeek);
+  pendingRestoreSeek = null;
+}
+
 // Seek buttons on iOS appear when seekforward/seekbackward handlers are registered,
 // NOT from calling setPositionState — so we still skip those handlers below.
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -344,6 +360,10 @@ const usePlayerStore = create((set, get) => ({
 
   playSong: async (song, queue = null, queueIndex = 0, context, contextLabel, navigating = false) => {
     const state = get();
+    // Before the same-song check: explicitly playing a song — even the one
+    // restored from last session — means start it fresh, not at the restored
+    // timestamp. Only resume() (below) should honour that saved position.
+    cancelPendingRestoreSeek();
     if (state.currentSong?.id === song.id) {
       // Re-clicking the current song restarts it from the beginning
       audio.currentTime = 0;
@@ -475,6 +495,7 @@ const usePlayerStore = create((set, get) => ({
     const nextSrc = streamUrl(queue[idx].id);
     if (preloader.src === nextSrc && !preloader.error) {
       cancelPendingDeepSeek(); // starting a different song — don't let a stale seek target leak into it
+      cancelPendingRestoreSeek();
       // Save current song to history (playSong normally does this but is bypassed here)
       if (!goingBack) {
         const cur = get();
@@ -907,10 +928,13 @@ try {
     });
     audio.src = streamUrl(saved.song.id);
     if (saved.time > 0) {
-      audio.addEventListener('loadedmetadata', function onMeta() {
+      // Kept in pendingRestoreSeek so playing anything explicitly can cancel
+      // it — see cancelPendingRestoreSeek above for why that matters.
+      pendingRestoreSeek = () => {
         audio.currentTime = saved.time;
-        audio.removeEventListener('loadedmetadata', onMeta);
-      });
+        cancelPendingRestoreSeek();
+      };
+      audio.addEventListener('loadedmetadata', pendingRestoreSeek);
     }
     applyMediaSessionMeta(saved.song);
   }
